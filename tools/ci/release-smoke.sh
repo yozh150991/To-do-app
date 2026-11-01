@@ -23,7 +23,8 @@ BUILD_TOOLS="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -
 
 EXPECTED="$(keytool -list -v -keystore "$KEYSTORE" -storepass "$PASSWORD" -alias ci \
   | awk '/SHA256:/ {print $2}' | tr -d ':' | tr 'A-F' 'a-f')"
-ACTUAL="$(awk -F': ' '/Signer #1 certificate SHA-256 digest/ {print $2}' "$WORK/apksigner.txt")"
+# apksigner prints "Signer #1 certificate ..." or "Signer (minSdkVersion=..) certificate ..." by version.
+ACTUAL="$(grep -E 'certificate SHA-256 digest: ' "$WORK/apksigner.txt" | head -n 1 | awk '{print $NF}')"
 ABIS="$(unzip -l "$APK" | awk '{print $4}' | grep '^lib/' | cut -d/ -f2 | sort -u | tr '\n' ' ')"
 BADGING="$("$BUILD_TOOLS/aapt2" dump badging "$APK" | head -n 1)"
 
@@ -31,10 +32,18 @@ BADGING="$("$BUILD_TOOLS/aapt2" dump badging "$APK" | head -n 1)"
   echo "release APK: $(du -k "$APK" | cut -f1) KiB ($(stat -c %s "$APK") bytes)"
   echo "ABIs in APK: ${ABIS:-none}"
   echo "$BADGING"
-  grep -E "^Verified using v[0-9]" "$WORK/apksigner.txt"
-  echo "signer certificate matches the build key: $([ "$EXPECTED" = "$ACTUAL" ] && echo yes || echo NO)"
+  grep -E "^Verified using v[0-9].*true" "$WORK/apksigner.txt"
+  grep -E "certificate SHA-256 digest" "$WORK/apksigner.txt" | head -n 1
+  echo "signer certificate matches the build key: $([ -n "$ACTUAL" ] && [ "$EXPECTED" = "$ACTUAL" ] && echo yes || echo NO)"
 } | tee "$EVIDENCE_DIR/release-apk.txt"
 
 rm -rf "$WORK"
-[ -n "$ACTUAL" ] && [ "$EXPECTED" = "$ACTUAL" ]
-[ "$ABIS" = "arm64-v8a " ]
+if [ -z "$ACTUAL" ] || [ "$EXPECTED" != "$ACTUAL" ]; then
+  echo "FAIL: APK signer certificate '$ACTUAL' does not match the build key '$EXPECTED'" >&2
+  exit 1
+fi
+if [ "$ABIS" != "arm64-v8a " ]; then
+  echo "FAIL: release APK ABIs are '$ABIS', expected only arm64-v8a" >&2
+  exit 1
+fi
+echo "release smoke test passed"

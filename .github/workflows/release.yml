@@ -83,7 +83,8 @@ jobs:
           APK=androidApp/build/outputs/apk/release/androidApp-release.apk
           BUILD_TOOLS="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -n 1)"
           "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK" > apksigner.txt
-          ACTUAL=$(awk -F': ' '/Signer #1 certificate SHA-256 digest/ {print $2}' apksigner.txt)
+          # apksigner prints "Signer #1 certificate ..." or "Signer (minSdkVersion=..) certificate ..." by version.
+          ACTUAL=$(grep -E 'certificate SHA-256 digest: ' apksigner.txt | head -n 1 | awk '{print $NF}')
           if [ "$ACTUAL" != "$PINNED_CERT" ]; then
             echo "::error::APK is signed with $ACTUAL, expected the pinned release certificate $PINNED_CERT"; exit 1
           fi
