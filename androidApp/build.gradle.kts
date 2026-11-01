@@ -1,5 +1,3 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-
 // AGP 9: built-in Kotlin compiles this module; KMP code lives in library modules.
 plugins {
     alias(libs.plugins.android.application)
@@ -43,7 +41,6 @@ android {
 
 kotlin {
     compilerOptions {
-        jvmTarget.set(JvmTarget.JVM_17)
         optIn.addAll("kotlin.time.ExperimentalTime", "kotlin.uuid.ExperimentalUuidApi")
     }
 }

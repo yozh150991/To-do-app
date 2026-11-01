@@ -9,3 +9,11 @@ plugins {
     alias(libs.plugins.ksp) apply false
     alias(libs.plugins.room3) apply false
 }
+
+// One JVM bytecode level for every Kotlin/JVM and Kotlin/Android compilation
+// (matches Java compileOptions in :androidApp).
+subprojects {
+    tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile>().configureEach {
+        compilerOptions.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
+}

@@ -1,5 +1,3 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.compose.multiplatform)
@@ -7,9 +5,7 @@ plugins {
 }
 
 kotlin {
-    jvm {
-        compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
-    }
+    jvm()
 
     compilerOptions {
         optIn.addAll("kotlin.time.ExperimentalTime", "kotlin.uuid.ExperimentalUuidApi")
