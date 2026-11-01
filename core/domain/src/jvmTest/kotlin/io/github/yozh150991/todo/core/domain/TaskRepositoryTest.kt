@@ -43,7 +43,7 @@ class TaskRepositoryTest {
     }
 
     @Test
-    fun bootstrapCreatesOneWorkspaceWithInboxEvenUnderConcurrency() = runBlocking {
+    fun bootstrapCreatesOneWorkspaceWithInboxEvenUnderConcurrency() = runBlocking<Unit> {
         val store = openStore()
         val repo = repository(store)
         val results = (1..20).map { async(Dispatchers.Default) { repo.workspace() } }.awaitAll()
@@ -60,7 +60,7 @@ class TaskRepositoryTest {
     }
 
     @Test
-    fun createTaskWritesEntityActivityAndOutboxTogether() = runBlocking {
+    fun createTaskWritesEntityActivityAndOutboxTogether() = runBlocking<Unit> {
         val store = openStore()
         val repo = repository(store)
         val task = repo.createTask("  Купити молоко  ", priority = Priority.P1)
@@ -79,7 +79,7 @@ class TaskRepositoryTest {
     }
 
     @Test
-    fun blankContentWritesNothing() = runBlocking {
+    fun blankContentWritesNothing() = runBlocking<Unit> {
         val store = openStore()
         val repo = repository(store)
         repo.workspace()
@@ -91,7 +91,7 @@ class TaskRepositoryTest {
     }
 
     @Test
-    fun unknownProjectWritesNothing() = runBlocking {
+    fun unknownProjectWritesNothing() = runBlocking<Unit> {
         val store = openStore()
         val repo = repository(store)
         repo.workspace()
@@ -104,7 +104,7 @@ class TaskRepositoryTest {
 
     /** Ф0 gate: "Транзакція Entity + Outbox проходить rollback/crash тест". */
     @Test
-    fun outboxFailureRollsBackEntityAndActivity() = runBlocking {
+    fun outboxFailureRollsBackEntityAndActivity() = runBlocking<Unit> {
         val store = openStore()
         // Every operation gets the same ID, so the second outbox insert violates the primary key
         // after the task row and the activity row were already written in that transaction.
@@ -122,7 +122,7 @@ class TaskRepositoryTest {
     }
 
     @Test
-    fun exceptionInsideWriteRollsBackEverything() = runBlocking {
+    fun exceptionInsideWriteRollsBackEverything() = runBlocking<Unit> {
         val store = openStore()
         val repo = repository(store)
         val task = repo.createTask("Survivor")
@@ -142,7 +142,7 @@ class TaskRepositoryTest {
     }
 
     @Test
-    fun completeIsIdempotent() = runBlocking {
+    fun completeIsIdempotent() = runBlocking<Unit> {
         val store = openStore()
         val repo = repository(store)
         val task = repo.createTask("Pay rent")
@@ -160,7 +160,7 @@ class TaskRepositoryTest {
     }
 
     @Test
-    fun renameRecordsOnlyRealChanges() = runBlocking {
+    fun renameRecordsOnlyRealChanges() = runBlocking<Unit> {
         val store = openStore()
         val repo = repository(store)
         val task = repo.createTask("Draft")
@@ -175,7 +175,7 @@ class TaskRepositoryTest {
     }
 
     @Test
-    fun deleteAndRestoreAreSoft() = runBlocking {
+    fun deleteAndRestoreAreSoft() = runBlocking<Unit> {
         val store = openStore()
         val repo = repository(store)
         val task = repo.createTask("Temporary")
@@ -188,7 +188,7 @@ class TaskRepositoryTest {
     }
 
     @Test
-    fun localSeqIsContiguousUnderConcurrentWrites() = runBlocking {
+    fun localSeqIsContiguousUnderConcurrentWrites() = runBlocking<Unit> {
         val store = openStore()
         val repo = repository(store)
         repo.workspace()
@@ -201,7 +201,7 @@ class TaskRepositoryTest {
     }
 
     @Test
-    fun stateSurvivesReopenAndSequenceContinues() = runBlocking {
+    fun stateSurvivesReopenAndSequenceContinues() = runBlocking<Unit> {
         val first = openStore()
         val repo1 = repository(first)
         val created = repo1.createTask("Persisted")
@@ -219,7 +219,7 @@ class TaskRepositoryTest {
     }
 
     @Test
-    fun inboxFlowEmitsNewTasksInOrder() = runBlocking {
+    fun inboxFlowEmitsNewTasksInOrder() = runBlocking<Unit> {
         val repo = repository()
         repo.observeInbox().test {
             assertEquals(emptyList(), awaitItem())

@@ -23,7 +23,7 @@
 ## Вимоги
 
 - JDK 17+ (CI використовує Temurin 21).
-- Android SDK з API 36 для збірки APK.
+- Android SDK з API 37 для збірки APK.
 - Gradle не потрібен окремо: використовуйте `./gradlew` (Gradle 9.7.0, перевірка checksum дистрибутиву).
 
 ## Збірка й тести

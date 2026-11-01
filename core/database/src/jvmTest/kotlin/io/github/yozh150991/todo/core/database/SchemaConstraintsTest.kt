@@ -48,7 +48,7 @@ class SchemaConstraintsTest {
     )
 
     @Test
-    fun dataSurvivesCloseAndReopen() = runBlocking {
+    fun dataSurvivesCloseAndReopen() = runBlocking<Unit> {
         db.projectDao().insert(project("inbox", inbox = true))
         db.taskDao().insert(task("t1", "inbox"))
         db.close()
@@ -60,7 +60,7 @@ class SchemaConstraintsTest {
     }
 
     @Test
-    fun journalModeIsWal() = runBlocking {
+    fun journalModeIsWal() = runBlocking<Unit> {
         db.projectDao().count() // forces the database to open
         val mode = db.useReaderConnection { connection ->
             connection.usePrepared("PRAGMA journal_mode") { stmt ->
@@ -73,7 +73,7 @@ class SchemaConstraintsTest {
     }
 
     @Test
-    fun foreignKeysAreEnforced() = runBlocking {
+    fun foreignKeysAreEnforced() = runBlocking<Unit> {
         db.projectDao().insert(project("inbox", inbox = true))
         assertFails("Task with an unknown project must be rejected") {
             db.taskDao().insert(task("orphan", projectId = "missing"))
@@ -85,7 +85,7 @@ class SchemaConstraintsTest {
     }
 
     @Test
-    fun onlyOneInboxAndOneWorkspace() = runBlocking {
+    fun onlyOneInboxAndOneWorkspace() = runBlocking<Unit> {
         db.projectDao().insert(project("inbox", inbox = true))
         assertFails { db.projectDao().insert(project("inbox-2", inbox = true)) }
         db.projectDao().insert(project("work"))
@@ -97,7 +97,7 @@ class SchemaConstraintsTest {
     }
 
     @Test
-    fun externalIdentityIsUniquePerSourceId() = runBlocking {
+    fun externalIdentityIsUniquePerSourceId() = runBlocking<Unit> {
         val identity = ExternalIdentityEntity(
             source = "todoist", entityType = "task", sourceId = "6Xf2", localId = "local-1",
             sourceHash = "h1", importVersion = 1, lastSeenAt = 1,
