@@ -31,7 +31,7 @@
 
 ## Матриця
 
-Дата перевірки: 01.11.2026. Коміт: `dbca137361` (PR #2). Емулятори: Android 8.0 (API 26, `default` x86_64) і Android 17 (API 37, `google_atd` x86_64), запуск скриптом `tools/ci/run-emulator.sh`.
+Дата перевірки: 01.11.2026. Коміти: `dbca137361` (PR #2), `9cf79f7372` (PR #3: release-підпис і оновлення поверх). Емулятори: Android 8.0 (API 26, `default` x86_64) і Android 17 (API 37, `google_atd` x86_64), запуск скриптом `tools/ci/run-emulator.sh`.
 
 | Критерій | Android | Desktop / JVM | Web / Wasm |
 | --- | --- | --- | --- |
@@ -42,7 +42,8 @@
 | Міграція v1 → v2 зі snapshot (FIX-01): дані, нова FK, WAL-фрейми, відкат, збій на кожному кроці, нестача місця, відмова від downgrade | `pass` — API 26 і 37 | `pass` | `not_tested` |
 | Спільні parser/timezone/recurrence fixtures | `not_tested` | `not_tested` | `not_tested` |
 | supabase-kt (Auth, PostgREST/RPC, Realtime) | `not_tested` | `not_tested` | `not_tested` |
-| Release/CI | Debug APK у CI; release-підпис `not_tested` | Runnable JAR; запуск вікна в CI не перевіряється (headless) | `not_tested` |
+| Release-підпис і ABI | `pass` (механізм) — release APK з одноразовим ключем у CI: підпис APK Signature Scheme v2, сертифікат збігається, лише `arm64-v8a`, 10.7 MiB. Реальний ключ — `not_tested` (крок власника, `docs/RELEASE.md`) | Runnable JAR; запуск вікна в CI не перевіряється (headless) | `not_tested` |
+| Оновлення поверх попередньої версії (`install -r`) | `pass` — емулятор API 37: база PR → поточна гілка, workspace, Inbox і всі рядки збережені (PR #3: v2 → v2; міграція v1 → v2 перевірена сценаріями) | — | — |
 
 **Примітка про емулятор API 37.** Пакети системних образів Android 17 мають мінорний рівень у назві (`system-images;android-37.0;…`). Повний образ `google_apis` не дійшов до `boot_completed` на GitHub-hosted runner, тому для API 37 використовується ATD-образ (`google_atd`), призначений для автоматизованих тестів. Для тестів шару даних різниці немає; UI-тести на повному образі — окрема перевірка пізніше.
 
@@ -59,12 +60,12 @@
 | `sqlite_version()` і `compile_options` на Android API 26 і JVM | Виконано в CI; на реальному телефоні — ні |
 | FTS5 uk/pl/en на API 26 і актуальному Android | Виконано (API 26, API 37) |
 | `VACUUM INTO` під записами у WAL, `integrity_check`, semantic comparison, crash і нестача місця | Виконано (сценарії `walFramesAreCapturedBySnapshot`, `interruptedUpgradeIsRecovered`, `insufficientSpaceLeavesDatabaseUntouched`) |
-| Приріст розміру APK і рішення щодо ABI split | Debug APK з усіма ABI — 17.80 MiB; рішення приймається разом із release-збіркою |
+| Приріст розміру APK і рішення щодо ABI split | Рішення: release лише `arm64-v8a` (`-PreleaseAbis` для інших). Release APK — 10.7 MiB; debug з усіма ABI — 17.8 MiB |
 
 ## Що залишилось для gate Ф0
 
-1. Release keystore у двох місцях, підписана збірка в CI лише з захищеної гілки/тегу, перевірка оновлення v0.0.1 → v0.0.2 поверх (§3.4); розмір release APK і ABI split.
-2. ADR каналу оновлень (Obtainium або вбудована перевірка).
+1. **Власник:** створити ключ, дві резервні копії, secrets середовища `release`, закріпити відбиток; випустити `v0.0.1` і `v0.0.2` (друга — з ключем із резервної копії) й оновити поверх на телефоні (`docs/RELEASE.md`, чекліст gate).
+2. **Власник:** прийняти або змінити ADR-003 (канал оновлень).
 3. Web spike і рішення pass/blocked з ADR; Desktop runtime UI-перевірка.
 4. supabase-kt module matrix.
 5. `docs/UX_SPEC.md`, рядки в Compose resources (uk/en/pl), розбиття специфікації на `docs/*` за §13.4.
