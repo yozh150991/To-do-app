@@ -18,9 +18,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
@@ -70,9 +70,9 @@ jobs:
           - api: 37
             target: google_apis
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
@@ -84,6 +84,15 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+
+      # Recorded in the device log so the PR report shows which images exist when the emulator fails.
+      - name: List system images
+        run: |
+          {
+            echo "== system images for API ${{ matrix.api }} (sdkmanager --list) =="
+            yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --list 2>/dev/null \
+              | grep -E "system-images;android-${{ matrix.api }}[;.-]" | sed 's/ *|.*//' | sort -u || true
+          } | tee device-${{ matrix.api }}-log.txt
 
       # Compile before the emulator boots so emulator minutes are spent on tests only.
       - name: Assemble app and test APKs
@@ -128,7 +137,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: actions/download-artifact@v4
         with:

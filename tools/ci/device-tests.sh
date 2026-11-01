@@ -8,7 +8,7 @@ EVIDENCE_DIR="androidApp/build/reports/runtime-evidence"
 mkdir -p "$EVIDENCE_DIR"
 
 adb logcat -c || true
-./gradlew --stacktrace --continue :androidApp:connectedDebugAndroidTest > "device-$API-log.txt" 2>&1
+./gradlew --stacktrace --continue :androidApp:connectedDebugAndroidTest >> "device-$API-log.txt" 2>&1
 STATUS=$?
 echo "$STATUS" > "device-$API-result.txt"
 tail -n 40 "device-$API-log.txt"
