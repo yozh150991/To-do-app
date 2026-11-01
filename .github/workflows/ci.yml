@@ -41,6 +41,13 @@ jobs:
             :desktopApp:jvmJar \
             2>&1 | tee build-log.txt
 
+      # Proves the release signing path with a throwaway key; the real key exists only in the
+      # Release workflow's secrets (docs/RELEASE.md).
+      - name: Release build with a throwaway key
+        run: |
+          set -o pipefail
+          bash tools/ci/release-smoke.sh 2>&1 | tee -a build-log.txt
+
       - name: Upload build outputs
         if: always()
         uses: actions/upload-artifact@v4
@@ -56,6 +63,7 @@ jobs:
             **/build/reports/runtime-evidence/**
             **/build/test-results/**/*.xml
             core/database/schemas/**
+            androidApp/build/outputs/apk/release/*.apk
 
   android-device:
     name: Android emulator API ${{ matrix.api }}
@@ -106,7 +114,9 @@ jobs:
       # Own script instead of a packaged emulator action: every install/boot step lands in the
       # device log, which the PR report shows when a run fails.
       - name: Run instrumented tests on the emulator
-        run: bash tools/ci/run-emulator.sh ${{ matrix.api }} ${{ matrix.image-api }} ${{ matrix.target }}
+        run: >-
+          bash tools/ci/run-emulator.sh device-${{ matrix.api }} ${{ matrix.image-api }} ${{ matrix.target }}
+          bash tools/ci/device-tests.sh ${{ matrix.api }}
 
       - name: Upload device outputs
         if: always()
@@ -126,11 +136,62 @@ jobs:
       - name: Fail if instrumented tests failed
         run: test "$(cat device-${{ matrix.api }}-result.txt 2>/dev/null || echo 1)" = "0"
 
+  upgrade:
+    name: Upgrade over previous version
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Build previous (PR base) and current APKs
+        run: |
+          set -o pipefail
+          bash tools/ci/build-upgrade-pair.sh "${{ github.event.pull_request.base.sha }}" 2>&1 | tee upgrade-log.txt
+
+      - name: Install previous, upgrade in place, compare data
+        run: >-
+          bash tools/ci/run-emulator.sh upgrade 37.0 google_atd
+          bash tools/ci/upgrade-test.sh
+
+      - name: Upload upgrade outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: upgrade-${{ github.run_number }}
+          if-no-files-found: ignore
+          retention-days: 14
+          path: |
+            upgrade-log.txt
+            upgrade-result.txt
+            upgrade-emulator.txt
+            upgrade/before/**
+            upgrade/after/**
+            androidApp/build/reports/runtime-evidence/upgrade.txt
+
+      - name: Fail if the upgrade check failed
+        run: test "$(cat upgrade-result.txt 2>/dev/null || echo 1)" = "0"
+
   # GitHub Actions logs are not reachable from every reviewer environment, so all evidence is
   # mirrored into one PR comment that is updated on every run.
   report:
     name: PR report
-    needs: [build, android-device]
+    needs: [build, android-device, upgrade]
     if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -147,18 +208,19 @@ jobs:
 
       - name: Compose report
         run: |
-          device() {
-            if [ -f "device-$1-result.txt" ]; then
-              if [ "$(cat "device-$1-result.txt")" = "0" ]; then echo success; else echo failure; fi
+          verdict() { # $1 = result file, $2 = job result when the file is missing
+            if [ -f "$1" ]; then
+              if [ "$(cat "$1")" = "0" ]; then echo success; else echo failure; fi
             else
-              echo "${{ needs.android-device.result }} (no result file)"
+              echo "$2 (no result file)"
             fi
           }
           python3 tools/ci/report.py \
             --sha "${{ github.event.pull_request.head.sha }}" \
             --job "Build and JVM tests=${{ needs.build.result }}=build-log.txt" \
-            --job "Android emulator API 26=$(device 26)=device-26-log.txt" \
-            --job "Android emulator API 37=$(device 37)=device-37-log.txt" \
+            --job "Android emulator API 26=$(verdict device-26-result.txt ${{ needs.android-device.result }})=device-26-log.txt" \
+            --job "Android emulator API 37=$(verdict device-37-result.txt ${{ needs.android-device.result }})=device-37-log.txt" \
+            --job "Upgrade over previous version=$(verdict upgrade-result.txt ${{ needs.upgrade.result }})=upgrade-log.txt" \
             > ci-report.md
           cat ci-report.md >> "$GITHUB_STEP_SUMMARY"
 

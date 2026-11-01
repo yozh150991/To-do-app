@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
-# Boots an Android emulator, runs the instrumented tests and shuts the emulator down.
-# Every step is logged into device-<api>-log.txt so the PR report shows why a run failed.
+# Boots an Android emulator, runs a payload command against it and shuts the emulator down.
+# Every step is logged into <label>-log.txt so the PR report shows why a run failed.
 #
-# Usage: run-emulator.sh <api> <system-image-api> <target>
-#   e.g. run-emulator.sh 26 26 default
-#        run-emulator.sh 37 37.0 google_apis   (Android 17+ images carry a minor level)
+# Usage: run-emulator.sh <label> <system-image-api> <target> <payload command...>
+#   e.g. run-emulator.sh device-26 26 default bash tools/ci/device-tests.sh 26
+#        run-emulator.sh upgrade 37.0 google_atd bash tools/ci/upgrade-test.sh
+#   (Android 17+ system images carry a minor level: 37.0)
 set -u
-API="$1"
+LABEL="$1"
 IMAGE_API="$2"
 TARGET="$3"
-LOG="device-$API-log.txt"
-EMULATOR_LOG="device-$API-emulator.txt"
+shift 3
+LOG="$LABEL-log.txt"
+EMULATOR_LOG="$LABEL-emulator.txt"
 SDK="${ANDROID_HOME:?ANDROID_HOME is not set}"
 BIN="$SDK/cmdline-tools/latest/bin"
 PACKAGE="system-images;android-$IMAGE_API;$TARGET;x86_64"
@@ -68,7 +70,8 @@ for setting in window_animation_scale transition_animation_scale animator_durati
 done
 "$ADB" shell input keyevent 82 >/dev/null 2>&1 || true
 
-PATH="$SDK/platform-tools:$PATH" bash tools/ci/device-tests.sh "$API"
+log "== payload: $*"
+PATH="$SDK/platform-tools:$PATH" "$@"
 
 "$ADB" emu kill >/dev/null 2>&1 || true
 wait "$EMULATOR_PID" 2>/dev/null || true
