@@ -63,4 +63,4 @@
 - Драйвер: `BundledSQLiteDriver` на Android і JVM.
 - Журнал: WAL (`JournalMode.WRITE_AHEAD_LOGGING`, перевіряється тестом).
 - `fallbackToDestructiveMigration` не використовується.
-- FTS5-токенайзер: кандидат `unicode61 remove_diacritics 2`; остаточний вибір фіксується тут після тесту на Android API 26 (ADR-001).
+- FTS5-токенайзер: **`unicode61 remove_diacritics 2`** (ADR-001 п. 5). Перевірено на JVM, Android API 26 і API 37: точний збіг, регістр кирилиці, префіксний пошук і пошук польських слів без діакритики (`prad` → `prąd`). Сама FTS-таблиця для задач з'явиться у Ф6a.
