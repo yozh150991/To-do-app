@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and test (Android + JVM)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      # Validates gradle-wrapper.jar checksums and caches dependencies.
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build, test, assemble
+        id: gradle
+        run: |
+          set -o pipefail
+          ./gradlew --stacktrace --continue \
+            :core:model:jvmTest \
+            :core:database:jvmTest \
+            :core:domain:jvmTest \
+            :androidApp:assembleDebug \
+            :desktopApp:jvmJar \
+            2>&1 | tee build-log.txt
+
+      - name: Compose report
+        if: always()
+        run: |
+          python3 tools/ci/report.py build-log.txt "${{ steps.gradle.outcome }}" "${{ github.event.pull_request.head.sha || github.sha }}" > ci-report.md
+          cat ci-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-${{ github.run_number }}
+          if-no-files-found: ignore
+          retention-days: 14
+          path: |
+            build-log.txt
+            ci-report.md
+            androidApp/build/outputs/apk/**/*.apk
+            desktopApp/build/libs/*.jar
+            **/build/reports/tests/**
+            **/build/reports/runtime-evidence/**
+            **/build/test-results/**/*.xml
+            core/database/schemas/**
+
+      # Logs of Actions runs are not reachable from every reviewer environment, so the
+      # evidence is mirrored into a single PR comment that is updated on every run.
+      - name: Post report to PR
+        if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          id=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+                 --jq '[.[] | select(.body | startswith("<!-- ci-report -->"))][0].id // empty')
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$id" -F body=@ci-report.md >/dev/null
+          else
+            gh api -X POST "repos/$REPO/issues/$PR/comments" -F body=@ci-report.md >/dev/null
+          fi

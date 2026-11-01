@@ -1,0 +1,26 @@
+# Gradle / Kotlin
+.gradle/
+build/
+.kotlin/
+local.properties
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# Android
+*.apk
+*.aab
+captures/
+
+# Signing material must never be committed (spec §3.4, §13.2)
+*.jks
+*.keystore
+keystore.properties
+signing/
+
+# Secrets
+.env
+*.env
