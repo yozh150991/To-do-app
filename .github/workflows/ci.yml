@@ -66,8 +66,11 @@ jobs:
       matrix:
         include:
           - api: 26
+            image-api: "26"
             target: default
+          # Since Android 17 the SDK names system images with a minor level: android-37.0.
           - api: 37
+            image-api: "37.0"
             target: google_apis
     steps:
       - uses: actions/checkout@v5
@@ -102,6 +105,7 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: ${{ matrix.api }}
+          system-image-api-level: ${{ matrix.image-api }}
           target: ${{ matrix.target }}
           arch: x86_64
           disable-animations: true
