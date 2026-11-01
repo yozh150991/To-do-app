@@ -14,6 +14,9 @@ EMULATOR_LOG="device-$API-emulator.txt"
 SDK="${ANDROID_HOME:?ANDROID_HOME is not set}"
 BIN="$SDK/cmdline-tools/latest/bin"
 PACKAGE="system-images;android-$IMAGE_API;$TARGET;x86_64"
+# avdmanager and the emulator must agree on where AVDs live.
+export ANDROID_AVD_HOME="$HOME/.android/avd"
+mkdir -p "$ANDROID_AVD_HOME"
 
 log() { echo "$*" | tee -a "$LOG"; }
 
@@ -29,12 +32,15 @@ fail() {
 log "== installing $PACKAGE, emulator, platform-tools"
 yes | "$BIN/sdkmanager" --install "$PACKAGE" "emulator" "platform-tools" > sdk-install.txt 2>&1
 INSTALL_STATUS=$?
-grep -v '^\[' sdk-install.txt | tail -n 15 | tee -a "$LOG"
+grep -v '%' sdk-install.txt | tail -n 15 | tee -a "$LOG"
 [ "$INSTALL_STATUS" -eq 0 ] || fail "sdkmanager failed with $INSTALL_STATUS"
-log "emulator version: $("$SDK/emulator/emulator" -version 2>/dev/null | head -n 1)"
 
 log "== creating AVD"
-echo no | "$BIN/avdmanager" create avd --force -n ci -k "$PACKAGE" >> "$LOG" 2>&1 || fail "avdmanager failed"
+echo no | "$BIN/avdmanager" create avd --force -n ci -k "$PACKAGE" -p "$ANDROID_AVD_HOME/ci.avd" 2>&1 \
+  | grep -v '%' | tee -a "$LOG"
+[ "${PIPESTATUS[1]}" -eq 0 ] || fail "avdmanager failed"
+log "AVDs known to the emulator: $("$SDK/emulator/emulator" -list-avds 2>&1 | tr '\n' ' ')"
+ls -la "$ANDROID_AVD_HOME" >> "$LOG" 2>&1
 
 log "== booting"
 "$SDK/platform-tools/adb" start-server >> "$LOG" 2>&1
