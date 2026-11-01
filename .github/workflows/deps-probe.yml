@@ -1,0 +1,47 @@
+name: Dependency probe
+
+# Reports the latest published versions of key dependencies as a PR comment.
+# Runs only when the probe itself changes; versions are pinned by hand in
+# gradle/libs.versions.toml after reading the report.
+on:
+  pull_request:
+    paths:
+      - "tools/deps/**"
+      - ".github/workflows/deps-probe.yml"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Probe versions
+        env:
+          MODULE_DEPS: >-
+            google:androidx.room3:room3-runtime:3.0.3
+          EXTRA_GRADLE_VERSIONS: "9.6.0 9.7.0"
+        run: |
+          {
+            echo "<!-- deps-probe -->"
+            echo "Commit: \`${{ github.event.pull_request.head.sha }}\`"
+            echo
+            bash tools/deps/probe-versions.sh
+          } > probe.md
+          cat probe.md
+      - name: Post report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          id=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+                 --jq '[.[] | select(.body | startswith("<!-- deps-probe -->"))][0].id // empty')
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$id" -F body=@probe.md >/dev/null
+          else
+            gh api -X POST "repos/$REPO/issues/$PR/comments" -F body=@probe.md >/dev/null
+          fi
