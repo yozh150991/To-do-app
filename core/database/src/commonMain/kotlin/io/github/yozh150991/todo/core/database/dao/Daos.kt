@@ -5,11 +5,14 @@ import androidx.room3.Insert
 import androidx.room3.Query
 import androidx.room3.Update
 import io.github.yozh150991.todo.core.database.entity.ExternalIdentityEntity
+import io.github.yozh150991.todo.core.database.entity.LabelEntity
 import io.github.yozh150991.todo.core.database.entity.LocalWorkspaceEntity
 import io.github.yozh150991.todo.core.database.entity.OutboxOperationEntity
 import io.github.yozh150991.todo.core.database.entity.ProjectEntity
+import io.github.yozh150991.todo.core.database.entity.SectionEntity
 import io.github.yozh150991.todo.core.database.entity.TaskActivityEntity
 import io.github.yozh150991.todo.core.database.entity.TaskEntity
+import io.github.yozh150991.todo.core.database.entity.TaskLabelEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -125,4 +128,40 @@ interface ExternalIdentityDao {
 
     @Query("SELECT * FROM external_identity WHERE entity_type = :entityType AND local_id = :localId")
     suspend fun forLocalId(entityType: String, localId: String): List<ExternalIdentityEntity>
+}
+
+@Dao
+interface SectionDao {
+    @Insert
+    suspend fun insert(section: SectionEntity)
+
+    @Query("SELECT * FROM section WHERE id = :id")
+    suspend fun getById(id: String): SectionEntity?
+
+    @Query("SELECT * FROM section WHERE project_id = :projectId AND deleted_at IS NULL ORDER BY section_order")
+    suspend fun forProject(projectId: String): List<SectionEntity>
+
+    @Query("SELECT COUNT(*) FROM section")
+    suspend fun count(): Int
+}
+
+@Dao
+interface LabelDao {
+    @Insert
+    suspend fun insert(label: LabelEntity)
+
+    @Query("SELECT * FROM label WHERE id = :id")
+    suspend fun getById(id: String): LabelEntity?
+
+    @Insert
+    suspend fun attach(link: TaskLabelEntity)
+
+    @Query("DELETE FROM task_label WHERE task_id = :taskId AND label_id = :labelId")
+    suspend fun detach(taskId: String, labelId: String): Int
+
+    @Query("SELECT label_id FROM task_label WHERE task_id = :taskId ORDER BY label_id")
+    suspend fun labelIdsForTask(taskId: String): List<String>
+
+    @Query("SELECT COUNT(*) FROM label")
+    suspend fun count(): Int
 }

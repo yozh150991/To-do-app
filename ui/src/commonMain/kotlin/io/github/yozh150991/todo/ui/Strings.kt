@@ -12,4 +12,7 @@ object Strings {
     const val emptyInbox = "Задач поки немає"
 
     fun pendingSync(count: Int): String = "Очікують синхронізації: $count"
+
+    fun databaseUnavailable(reason: String?): String =
+        "Базу даних не вдалося відкрити, дані не змінено. ${reason.orEmpty()}".trim()
 }

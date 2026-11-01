@@ -20,6 +20,8 @@ class LocalStore(val database: AppDatabase) {
     val activities get() = database.taskActivityDao()
     val outbox get() = database.outboxDao()
     val externalIdentities get() = database.externalIdentityDao()
+    val sections get() = database.sectionDao()
+    val labels get() = database.labelDao()
 
     suspend fun <R> write(block: suspend LocalStore.() -> R): R =
         database.withWriteTransaction { this@LocalStore.block() }

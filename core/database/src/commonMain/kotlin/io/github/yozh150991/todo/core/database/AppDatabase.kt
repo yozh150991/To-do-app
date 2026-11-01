@@ -1,22 +1,28 @@
 package io.github.yozh150991.todo.core.database
 
+import androidx.room3.AutoMigration
 import androidx.room3.ConstructedBy
 import androidx.room3.Database
 import androidx.room3.RoomDatabase
 import androidx.room3.RoomDatabaseConstructor
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import io.github.yozh150991.todo.core.database.dao.ExternalIdentityDao
+import io.github.yozh150991.todo.core.database.dao.LabelDao
 import io.github.yozh150991.todo.core.database.dao.OutboxDao
 import io.github.yozh150991.todo.core.database.dao.ProjectDao
+import io.github.yozh150991.todo.core.database.dao.SectionDao
 import io.github.yozh150991.todo.core.database.dao.TaskActivityDao
 import io.github.yozh150991.todo.core.database.dao.TaskDao
 import io.github.yozh150991.todo.core.database.dao.WorkspaceDao
 import io.github.yozh150991.todo.core.database.entity.ExternalIdentityEntity
+import io.github.yozh150991.todo.core.database.entity.LabelEntity
 import io.github.yozh150991.todo.core.database.entity.LocalWorkspaceEntity
 import io.github.yozh150991.todo.core.database.entity.OutboxOperationEntity
 import io.github.yozh150991.todo.core.database.entity.ProjectEntity
+import io.github.yozh150991.todo.core.database.entity.SectionEntity
 import io.github.yozh150991.todo.core.database.entity.TaskActivityEntity
 import io.github.yozh150991.todo.core.database.entity.TaskEntity
+import io.github.yozh150991.todo.core.database.entity.TaskLabelEntity
 import kotlin.coroutines.CoroutineContext
 
 @Database(
@@ -27,8 +33,15 @@ import kotlin.coroutines.CoroutineContext
         TaskActivityEntity::class,
         OutboxOperationEntity::class,
         ExternalIdentityEntity::class,
+        SectionEntity::class,
+        LabelEntity::class,
+        TaskLabelEntity::class,
     ],
     version = AppDatabase.SCHEMA_VERSION,
+    // Every migration must also pass DatabaseOpener's snapshot + verification (FIX-01).
+    autoMigrations = [
+        AutoMigration(from = 1, to = 2),
+    ],
 )
 @ConstructedBy(AppDatabaseConstructor::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -38,9 +51,11 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun taskActivityDao(): TaskActivityDao
     abstract fun outboxDao(): OutboxDao
     abstract fun externalIdentityDao(): ExternalIdentityDao
+    abstract fun sectionDao(): SectionDao
+    abstract fun labelDao(): LabelDao
 
     companion object {
-        const val SCHEMA_VERSION = 1
+        const val SCHEMA_VERSION = 2
         const val DEFAULT_FILE_NAME = "todo.db"
     }
 }
@@ -54,7 +69,8 @@ expect object AppDatabaseConstructor : RoomDatabaseConstructor<AppDatabase> {
 /**
  * Shared builder settings for every platform (ADR-001):
  * bundled SQLite (FTS5 everywhere), WAL journal, no destructive migration fallback.
- * Migrations are registered here as they are added; there is none for schema v1.
+ * Migrations are declared on [AppDatabase]; production code opens the database through
+ * [DatabaseOpener], which snapshots and verifies around every schema upgrade.
  */
 internal fun RoomDatabase.Builder<AppDatabase>.buildConfigured(queryContext: CoroutineContext): AppDatabase =
     setDriver(BundledSQLiteDriver())
