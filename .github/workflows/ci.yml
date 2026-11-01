@@ -69,9 +69,11 @@ jobs:
             image-api: "26"
             target: default
           # Since Android 17 the SDK names system images with a minor level: android-37.0.
+          # ATD ("automated test device") images are headless and boot far faster in CI;
+          # the full google_apis image did not finish booting within 15 minutes on hosted runners.
           - api: 37
             image-api: "37.0"
-            target: google_apis
+            target: google_atd
     steps:
       - uses: actions/checkout@v5
 

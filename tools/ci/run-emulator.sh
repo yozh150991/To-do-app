@@ -21,11 +21,11 @@ mkdir -p "$ANDROID_AVD_HOME"
 log() { echo "$*" | tee -a "$LOG"; }
 
 fail() {
-  log "!! $*"
   if [ -f "$EMULATOR_LOG" ]; then
-    log "== last emulator output =="
-    tail -n 60 "$EMULATOR_LOG" | tee -a "$LOG"
+    log "== last emulator output (INFO lines omitted) =="
+    grep -v '^INFO' "$EMULATOR_LOG" | tail -n 40 | tee -a "$LOG"
   fi
+  log "!! $*"
   exit 1
 }
 
@@ -45,16 +45,22 @@ ls -la "$ANDROID_AVD_HOME" >> "$LOG" 2>&1
 log "== booting"
 "$SDK/platform-tools/adb" start-server >> "$LOG" 2>&1
 "$SDK/emulator/emulator" -avd ci -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim \
-  -camera-back none -no-snapshot -accel on > "$EMULATOR_LOG" 2>&1 &
+  -camera-back none -no-snapshot -accel on -memory 3072 -cores 3 > "$EMULATOR_LOG" 2>&1 &
 EMULATOR_PID=$!
 
+BOOT_START=$SECONDS
 DEADLINE=$((SECONDS + 900))
+NEXT_REPORT=$((SECONDS + 60))
 until [ "$("$SDK/platform-tools/adb" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; do
   kill -0 "$EMULATOR_PID" 2>/dev/null || fail "emulator process exited during boot"
   [ "$SECONDS" -lt "$DEADLINE" ] || fail "boot did not complete in 15 minutes"
+  if [ "$SECONDS" -ge "$NEXT_REPORT" ]; then
+    log "  ...$((SECONDS - BOOT_START))s: adb state=$("$SDK/platform-tools/adb" get-state 2>&1 | tr -d '\r'), bootanim=$("$SDK/platform-tools/adb" shell getprop init.svc.bootanim 2>/dev/null | tr -d '\r')"
+    NEXT_REPORT=$((SECONDS + 60))
+  fi
   sleep 5
 done
-log "booted after ${SECONDS}s"
+log "booted after $((SECONDS - BOOT_START))s"
 
 ADB="$SDK/platform-tools/adb"
 for setting in window_animation_scale transition_animation_scale animator_duration_scale; do
