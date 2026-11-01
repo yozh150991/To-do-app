@@ -101,16 +101,10 @@ jobs:
       - name: Assemble app and test APKs
         run: ./gradlew --stacktrace :androidApp:assembleDebug :androidApp:assembleDebugAndroidTest
 
-      - name: Run instrumented tests
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: ${{ matrix.api }}
-          system-image-api-level: ${{ matrix.image-api }}
-          target: ${{ matrix.target }}
-          arch: x86_64
-          disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: bash tools/ci/device-tests.sh ${{ matrix.api }}
+      # Own script instead of a packaged emulator action: every install/boot step lands in the
+      # device log, which the PR report shows when a run fails.
+      - name: Run instrumented tests on the emulator
+        run: bash tools/ci/run-emulator.sh ${{ matrix.api }} ${{ matrix.image-api }} ${{ matrix.target }}
 
       - name: Upload device outputs
         if: always()
@@ -122,6 +116,7 @@ jobs:
           path: |
             device-${{ matrix.api }}-log.txt
             device-${{ matrix.api }}-result.txt
+            device-${{ matrix.api }}-emulator.txt
             androidApp/build/outputs/androidTest-results/**
             androidApp/build/reports/androidTests/**
             androidApp/build/reports/runtime-evidence/**
