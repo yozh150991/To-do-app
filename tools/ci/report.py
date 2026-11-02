@@ -152,7 +152,7 @@ def main():
             out += [f"`{path}`", "```", text, "```"]
         out.append("")
 
-    apks = sorted(glob.glob("androidApp/build/outputs/apk/**/*.apk", recursive=True))
+    apks = sorted(glob.glob("androidApp/build/outputs/apk/**/*.apk", recursive=True) + glob.glob("dist/*.apk"))
     jars = sorted(glob.glob("desktopApp/build/libs/*.jar"))
     if apks or jars:
         out.append("#### Artifacts")

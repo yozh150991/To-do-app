@@ -15,6 +15,8 @@
 - Schema v2: `section`, `label`, `task_label`, зовнішній ключ `task.section_id` (AutoMigration 1 → 2).
 - Безпечне оновлення схеми (FIX-01): `VACUUM INTO` snapshot з перевіркою й sha256, маркер незавершеного оновлення, автоматичний відкат, перевірка вільного місця, відмова від downgrade. База відкривається один раз поза головним потоком; помилка відкриття показується в UI.
 - CI на GitHub Actions: JVM-тести, debug APK, Desktop JAR, instrumented-тести на емуляторах API 26 і API 37, зведений звіт із runtime-доказами в PR.
-- Release-підпис із змінних середовища (ключ ніколи не в git), release APK лише `arm64-v8a`, `versionCode`/`versionName` з тегу. Workflow `Release`: тег `vX.Y.Z` на `main` → підписаний APK і `.sha256` у GitHub Releases з перевіркою закріпленого сертифіката. На кожному PR: release-збірка з одноразовим ключем і тест оновлення поверх попередньої версії на емуляторі (`docs/RELEASE.md`, ADR-003 Proposed).
+- Release-підпис із змінних середовища (ключ ніколи не в git), release APK лише `arm64-v8a`, `versionCode`/`versionName` з тегу. Workflow `Release`: тег `vX.Y.Z` на `main` → підписаний APK і `.sha256` у GitHub Releases з перевіркою закріпленого сертифіката. На кожному PR: release-збірка з одноразовим ключем і тест оновлення поверх попередньої версії на емуляторі (`docs/RELEASE.md`).
+
+- Скрипти власника: `tools/release/create-keystore.sh` (ключ підпису) і `tools/release/build-release.sh` (основна збірка релізу на комп'ютері: перевірка `main`, версії й ключа, підписаний APK у `dist/`, тег, встановлення через USB). Запасна збірка — workflow `Release` на GitHub. CI проганяє обидва скрипти наскрізно на Linux і Windows (ADR-003).
 
 > Перший запис про реальний реліз створюється лише після збірки, перевірки й публікації артефактів. Не переносити сюди історичні правила зі специфікації.

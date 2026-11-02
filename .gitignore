@@ -11,6 +11,7 @@ local.properties
 .DS_Store
 
 # Android
+dist/
 *.apk
 *.aab
 captures/
