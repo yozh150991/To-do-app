@@ -3,4 +3,5 @@
 # APK signed with any other certificate. Changing this line means the app can no longer be updated
 # in place on existing installs (spec §3.4) — only ever change it via a reviewed PR.
 #
-# Not set yet: replace this comment block's last line with the fingerprint.
+# Key: todo-release.jks, alias todo-release, PKCS12, RSA 4096, created 2026-11-02.
+586de8906e45025ce16ff1822cc82c4e92ab386391ea74d41e97bcf56153a411
