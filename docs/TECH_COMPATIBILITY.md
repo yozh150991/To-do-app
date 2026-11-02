@@ -64,10 +64,9 @@
 
 ## Що залишилось для gate Ф0
 
-1. **Власник:** ключ створено 02.11.2026, відбиток закріплено в `.github/release-signing-cert.sha256`. Лишилось: дві резервні копії, secrets середовища `release`, випустити `v0.0.1` і `v0.0.2` (друга — з ключем із резервної копії) й оновити поверх на телефоні (`docs/RELEASE.md`, чекліст gate).
-2. **Власник:** прийняти або змінити ADR-003 (канал оновлень).
-3. Web spike і рішення pass/blocked з ADR; Desktop runtime UI-перевірка.
-4. supabase-kt module matrix.
-5. `docs/UX_SPEC.md`, рядки в Compose resources (uk/en/pl), розбиття специфікації на `docs/*` за §13.4.
-6. Golden fixtures часу TIME-01..TIME-08 як виконувані тести (time-only subset).
-7. Перевірка на реальному телефоні (sqlite evidence + встановлення APK).
+1. **Власник:** ключ створено 02.11.2026, відбиток закріплено в `.github/release-signing-cert.sha256`. Канал оновлень — Obtainium (ADR-003 прийнято). Лишилось: дві резервні копії, secrets середовища `release`, випустити `v0.0.1` і `v0.0.2` (друга — з ключем із резервної копії) й оновити поверх на телефоні (`docs/RELEASE.md`, чекліст gate).
+2. Web spike і рішення pass/blocked з ADR; Desktop runtime UI-перевірка.
+3. supabase-kt module matrix.
+4. `docs/UX_SPEC.md`, рядки в Compose resources (uk/en/pl), розбиття специфікації на `docs/*` за §13.4.
+5. Golden fixtures часу TIME-01..TIME-08 як виконувані тести (time-only subset).
+6. Перевірка на реальному телефоні (sqlite evidence + встановлення APK).
