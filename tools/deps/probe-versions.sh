@@ -69,6 +69,30 @@ row "Ktor client core" "$CENTRAL" io.ktor ktor-client-core
 row "Turbine" "$CENTRAL" app.cash.turbine turbine
 row "Kotest property" "$CENTRAL" io.kotest kotest-property
 row "JUnit 4" "$CENTRAL" junit junit
+# QA tools (spec §12.1: versions are pinned in Ф0).
+row "Roborazzi" "$CENTRAL" io.github.takahirom.roborazzi roborazzi
+row "Roborazzi Compose" "$CENTRAL" io.github.takahirom.roborazzi roborazzi-compose
+row "Roborazzi Compose Desktop" "$CENTRAL" io.github.takahirom.roborazzi roborazzi-compose-desktop
+row "Roborazzi Gradle plugin" "$CENTRAL" io.github.takahirom.roborazzi roborazzi-gradle-plugin
+row "Robolectric" "$CENTRAL" org.robolectric robolectric
+row "Compose MP ui-test" "$CENTRAL" org.jetbrains.compose.ui ui-test
+row "AndroidX Compose ui-test-junit4" "$GOOGLE" androidx.compose.ui ui-test-junit4
+row "AndroidX Compose ui-test-manifest" "$GOOGLE" androidx.compose.ui ui-test-manifest
+echo
+
+# Tools shipped as GitHub releases (CLI binaries, images).
+release_row() { # label owner/repo
+  local tag date
+  tag="$(gh api "repos/$2/releases/latest" --jq '.tag_name' 2>/dev/null)"
+  date="$(gh api "repos/$2/releases/latest" --jq '.published_at[0:10]' 2>/dev/null)"
+  echo "| $1 | \`$2\` | ${tag:-—} | ${date:-—} |"
+}
+echo "| Tool | GitHub repository | Latest release | Published |"
+echo "| --- | --- | --- | --- |"
+release_row "Maestro CLI" mobile-dev-inc/maestro
+release_row "Toxiproxy" Shopify/toxiproxy
+release_row "Supabase CLI" supabase/cli
+release_row "pgTAP" theory/pgtap
 echo
 
 GRADLE_CURRENT="$(curl -fsSL https://services.gradle.org/versions/current 2>/dev/null | jq -r '.version // empty')"

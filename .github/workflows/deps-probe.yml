@@ -21,6 +21,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Probe versions
         env:
+          GH_TOKEN: ${{ github.token }}
           MODULE_DEPS: >-
             google:androidx.room3:room3-runtime:3.0.3
           EXTRA_GRADLE_VERSIONS: "9.6.0 9.7.0"
