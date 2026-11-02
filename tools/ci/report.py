@@ -149,6 +149,8 @@ def main():
         out.append("#### Runtime evidence")
         for path in evidence:
             text = re.sub(r"compile_options: .*", "compile_options: (see artifact)", read(path).strip())
+            if len(text) > 6000:
+                text = text[:6000] + "\n…(truncated; full file in the workflow artifacts)"
             out += [f"`{path}`", "```", text, "```"]
         out.append("")
 
@@ -161,17 +163,20 @@ def main():
         out.append("")
 
     status = subprocess.run(
-        ["git", "status", "--porcelain", "--", "core/database/schemas"],
+        ["git", "status", "--porcelain", "--untracked-files=all", "--", "core/database/schemas", "kotlin-js-store"],
         capture_output=True, text=True, check=False,
     ).stdout.strip()
     if status:
-        out.append("#### Room schema not committed")
-        out.append("Generated schema differs from the repository; commit it:")
+        out.append("#### Generated files not committed")
+        out.append("Room schemas or the Kotlin/JS yarn.lock differ from the repository; commit them:")
         for line in status.splitlines():
             path = line[3:].strip()
-            files = [path] if os.path.isfile(path) else sorted(glob.glob(os.path.join(path, "**/*.json"), recursive=True))
+            files = [path] if os.path.isfile(path) else sorted(
+                glob.glob(os.path.join(path, "**/*.json"), recursive=True) + glob.glob(os.path.join(path, "**/*.lock"), recursive=True)
+            )
             for f in files:
-                out += [f"<details><summary><code>{f}</code></summary>", "", "```json", read(f), "```", "</details>"]
+                fence = "json" if f.endswith(".json") else "text"
+                out += [f"<details><summary><code>{f}</code></summary>", "", f"```{fence}", read(f), "```", "</details>"]
         out.append("")
 
     text = "\n".join(out)

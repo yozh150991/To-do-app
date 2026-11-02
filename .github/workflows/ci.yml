@@ -108,6 +108,62 @@ jobs:
       - name: Fail if the Windows run failed
         run: test "$(cat windows-release-result.txt 2>/dev/null || echo 1)" = "0"
 
+  web:
+    name: Web in browsers (Chromium, Firefox, WebKit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Build the web distribution
+        run: |
+          if ./gradlew --stacktrace :webApp:wasmJsBrowserDistribution > web-log.txt 2>&1; then
+            echo "built" >> web-log.txt
+          else
+            echo 1 > web-result.txt
+          fi
+          tail -n 40 web-log.txt
+          ls -la webApp/build/dist/wasmJs/productionExecutable 2>&1 | tee -a web-log.txt || true
+
+      # Plain static server without COOP/COEP headers (ADR-004); Chromium and Firefox are required.
+      - name: Browser tests
+        if: hashFiles('web-result.txt') == ''
+        working-directory: webApp/e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium firefox webkit > ../../playwright-install.txt 2>&1
+          npx playwright test 2>&1 | tee -a ../../web-log.txt || true
+          node summarize.mjs | tee -a ../../web-log.txt
+
+      - name: Upload web outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-${{ github.run_number }}
+          if-no-files-found: ignore
+          retention-days: 14
+          path: |
+            web-log.txt
+            web-result.txt
+            webApp/build/reports/runtime-evidence/**
+            webApp/build/test-results/**
+            webApp/e2e/test-results/**
+            kotlin-js-store/**
+
+      - name: Fail if the web check failed
+        run: test "$(cat web-result.txt 2>/dev/null || echo 1)" = "0"
+
   android-device:
     name: Android emulator API ${{ matrix.api }}
     runs-on: ubuntu-latest
@@ -234,7 +290,7 @@ jobs:
   # mirrored into one PR comment that is updated on every run.
   report:
     name: PR report
-    needs: [build, windows-release, android-device, upgrade]
+    needs: [build, windows-release, web, android-device, upgrade]
     if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -262,6 +318,7 @@ jobs:
             --sha "${{ github.event.pull_request.head.sha }}" \
             --job "Build and JVM tests=${{ needs.build.result }}=build-log.txt" \
             --job "Local release scripts on Windows=$(verdict windows-release-result.txt ${{ needs.windows-release.result }})=windows-release-log.txt" \
+            --job "Web in browsers=$(verdict web-result.txt ${{ needs.web.result }})=web-log.txt" \
             --job "Android emulator API 26=$(verdict device-26-result.txt ${{ needs.android-device.result }})=device-26-log.txt" \
             --job "Android emulator API 37=$(verdict device-37-result.txt ${{ needs.android-device.result }})=device-37-log.txt" \
             --job "Upgrade over previous version=$(verdict upgrade-result.txt ${{ needs.upgrade.result }})=upgrade-log.txt" \

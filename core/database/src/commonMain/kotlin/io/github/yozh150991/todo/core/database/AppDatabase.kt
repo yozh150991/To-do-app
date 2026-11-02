@@ -5,7 +5,7 @@ import androidx.room3.ConstructedBy
 import androidx.room3.Database
 import androidx.room3.RoomDatabase
 import androidx.room3.RoomDatabaseConstructor
-import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import androidx.sqlite.SQLiteDriver
 import io.github.yozh150991.todo.core.database.dao.ExternalIdentityDao
 import io.github.yozh150991.todo.core.database.dao.LabelDao
 import io.github.yozh150991.todo.core.database.dao.OutboxDao
@@ -67,13 +67,17 @@ expect object AppDatabaseConstructor : RoomDatabaseConstructor<AppDatabase> {
 }
 
 /**
- * Shared builder settings for every platform (ADR-001):
- * bundled SQLite (FTS5 everywhere), WAL journal, no destructive migration fallback.
- * Migrations are declared on [AppDatabase]; production code opens the database through
- * [DatabaseOpener], which snapshots and verifies around every schema upgrade.
+ * Shared builder settings. Each platform passes its driver and journal mode:
+ * Android/Desktop — bundled SQLite with WAL (ADR-001); Web — the worker driver with a rollback
+ * journal (ADR-004). There is never a destructive migration fallback. On Android/Desktop production
+ * code opens the database through [DatabaseOpener], which snapshots and verifies around every upgrade.
  */
-internal fun RoomDatabase.Builder<AppDatabase>.buildConfigured(queryContext: CoroutineContext): AppDatabase =
-    setDriver(BundledSQLiteDriver())
-        .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
+internal fun RoomDatabase.Builder<AppDatabase>.buildConfigured(
+    driver: SQLiteDriver,
+    journalMode: RoomDatabase.JournalMode,
+    queryContext: CoroutineContext,
+): AppDatabase =
+    setDriver(driver)
+        .setJournalMode(journalMode)
         .setQueryCoroutineContext(queryContext)
         .build()

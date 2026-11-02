@@ -1,6 +1,8 @@
 package io.github.yozh150991.todo.core.database
 
 import androidx.room3.Room
+import androidx.room3.RoomDatabase
+import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -12,7 +14,7 @@ import java.io.File
 fun createAppDatabase(file: File): AppDatabase {
     file.absoluteFile.parentFile?.mkdirs()
     return Room.databaseBuilder<AppDatabase>(name = file.absolutePath)
-        .buildConfigured(Dispatchers.IO)
+        .buildConfigured(BundledSQLiteDriver(), RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING, Dispatchers.IO)
 }
 
 /** Opens [file] with snapshot-protected upgrades (FIX-01). */

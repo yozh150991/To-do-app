@@ -2,8 +2,8 @@ package io.github.yozh150991.todo.core.database
 
 /**
  * Minimal file operations needed around the database file (snapshot, restore, markers).
- * Android and JVM share the same java.nio implementation; Web will provide its own storage
- * adapter when the Web target is added (spec §3.4: "На Web/Desktop механізм snapshot адаптується").
+ * Android and JVM share the same java.nio implementation. Web keeps its database in OPFS through
+ * the worker (ADR-004) and has no file-level snapshot yet (spec §3.4, gate of phase Ф7).
  */
 internal expect object PlatformFiles {
     fun exists(path: String): Boolean
