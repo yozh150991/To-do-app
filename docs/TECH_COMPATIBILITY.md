@@ -56,7 +56,7 @@
 
 - **Android:** шар даних пройшов runtime-перевірку на мінімальному (API 26) і актуальному (API 37) Android: CRUD і збереження після перезапуску, атомарність entity + activity + outbox, безперервний `local_seq` при 50 паралельних записах, безпечне оновлення схеми з відкатом. Не перевірено на реальному телефоні.
 - **Desktop/JVM:** ті самі сценарії `pass`. UI-вікно не перевіряється автоматично.
-- **Web:** Room/OPFS spike пройшов у обов'язкових браузерах (Chromium, Firefox): та сама схема, DAO і `TaskRepository` через `WebWorkerSQLiteDriver` і власний worker на SQLite WASM з VFS `opfs-sahpool`. COOP/COEP не потрібні, отже підходить будь-який статичний хостинг. Обмеження: одна вкладка; WebKit/Safari лише поза приватним режимом; сховище best-effort до синхронізації Ф5; Compose потребує WebGL 2. Fallback на IndexedDB не знадобився. Рішення — ADR-004 (чекає погодження власника).
+- **Web:** Room/OPFS spike пройшов у обов'язкових браузерах (Chromium, Firefox): та сама схема, DAO і `TaskRepository` через `WebWorkerSQLiteDriver` і власний worker на SQLite WASM з VFS `opfs-sahpool`. COOP/COEP не потрібні, отже підходить будь-який статичний хостинг. Обмеження: одна вкладка; WebKit/Safari лише поза приватним режимом; сховище best-effort до синхронізації Ф5; Compose потребує WebGL 2. Fallback на IndexedDB не знадобився. Рішення — ADR-004 (Accepted).
 
 ## Стан gate ADR-001
 
@@ -70,7 +70,7 @@
 ## Що залишилось для gate Ф0
 
 1. **Власник:** ключ створено 02.11.2026, відбиток закріплено в `.github/release-signing-cert.sha256`. Збірка — на комп'ютері власника скриптом `build-release.sh`, GitHub — запасна; без застосунку-оновлювача (ADR-003). Лишилось: дві резервні копії, Android Studio на комп'ютері, зібрати `v0.0.1` і `v0.0.2` (друга — з ключем із резервної копії) й оновити поверх на телефоні (`docs/RELEASE.md`, чекліст gate).
-2. ~~Web spike~~ — `pass` (ADR-004, погодження власника). Лишається Desktop runtime UI-перевірка.
+2. ~~Web spike~~ — `pass`, ADR-004 прийнято. Лишається Desktop runtime UI-перевірка.
 3. supabase-kt module matrix.
 4. `docs/UX_SPEC.md`, рядки в Compose resources (uk/en/pl), розбиття специфікації на `docs/*` за §13.4.
 5. Golden fixtures часу TIME-01..TIME-08 як виконувані тести (time-only subset).
