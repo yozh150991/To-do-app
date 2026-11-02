@@ -119,7 +119,10 @@ xdotool mousemove --window "$WID" $((WIDTH - 45)) 32 click 1 >> "$LOG" 2>&1
 sleep 3
 import -window root "$SHOTS/about.png" 2>> "$LOG" || true
 kill -0 "$APP_PID" 2>/dev/null || fail "the app exited after opening About"
-evidence "about: dialog opened, screenshot about.png"
+# The dialog's scrim dims the whole window, so most pixels differ from the screenshot before the click.
+CHANGED=$(compare -metric AE -fuzz 3% "$SHOTS/restart.png" "$SHOTS/about.png" null: 2>&1 | awk '{printf "%.0f", $1}')
+evidence "about: $CHANGED of $((WIDTH * HEIGHT)) window pixels changed after the click (about.png)"
+[ "${CHANGED:-0}" -gt $((WIDTH * HEIGHT / 4)) ] || fail "About did not open: only ${CHANGED:-0} pixels changed"
 stop_app
 [ "$(sql 'SELECT workspace_id FROM local_workspace')" = "$WORKSPACE" ] || fail "workspace changed after restart"
 [ "$(sql "SELECT COUNT(*) FROM task WHERE content = '$TASK_TEXT'")" = "1" ] || fail "task lost after restart"

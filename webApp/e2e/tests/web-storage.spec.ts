@@ -270,10 +270,14 @@ test('app UI starts, renders and saves a typed task', async ({ page, browserName
 
     // "About" sits at the right end of the top bar; its database facts are checked by ?selftest=inspect.
     const viewport = page.viewportSize() ?? { width: 1280, height: 720 };
+    const beforeAbout = await page.screenshot();
     await page.mouse.click(viewport.width - 45, 32);
     await page.waitForTimeout(2_000);
-    await page.screenshot({ path: path.join(evidenceDir, `ui-${browserName}-about.png`) });
+    const afterAbout = await page.screenshot({ path: path.join(evidenceDir, `ui-${browserName}-about.png`) });
+    // The dialog and its scrim repaint the canvas; an unchanged frame means the click opened nothing.
+    lines.push(`About changed the frame: ${!afterAbout.equals(beforeAbout)}`);
     lines.push(`errors after About: ${JSON.stringify(errors)}`);
+    expect(afterAbout.equals(beforeAbout), 'the About dialog did not open').toBe(false);
 
     await leave(page);
     const inspect = await selfTest(page, 'selftest=inspect');
