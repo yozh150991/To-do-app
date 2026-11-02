@@ -5,6 +5,7 @@
 - Чинна специфікація: [`task-manager-scope-roadmap-v2.6.1.md`](task-manager-scope-roadmap-v2.6.1.md) і рішення в [`docs/ADR/`](docs/ADR/README.md).
 - Стан сумісності платформ і версій: [`docs/TECH_COMPATIBILITY.md`](docs/TECH_COMPATIBILITY.md).
 - Модель даних: [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md).
+- Інтерфейс і поведінка (навігація, екрани, стани, жести, доступність): [`docs/UX_SPEC.md`](docs/UX_SPEC.md).
 - Релізи, ключ підпису, встановлення й оновлення на телефоні: [`docs/RELEASE.md`](docs/RELEASE.md).
 - Поточна фаза: **Ф0** (каркас і кросплатформний proof of concept). Робочого релізу ще немає.
 
