@@ -27,6 +27,7 @@
 | JDK у CI | Temurin 21 (bytecode target 17) |
 | Android | compileSdk 37, targetSdk 37, minSdk 26 |
 | Web: Kotlin/Wasm (`wasmJs`, browser) | Kotlin 2.4.21; `androidx.sqlite:sqlite-web` 2.7.1 (`WebWorkerSQLiteDriver`) |
+| Часові зони на Web | `@js-joda/timezone` 2.23.0 — IANA-правила для kotlinx-datetime у браузері (новіші версії вимагають `@js-joda/core` ≥ 5.7, а kotlinx-datetime 0.8.0 тягне 3.2.0) |
 | SQLite WASM у worker | `@sqlite.org/sqlite-wasm` 3.54.1-build1 → SQLite 3.54.1, VFS `opfs-sahpool` (`kotlin-js-store/wasm/yarn.lock`) |
 | Браузерні тести | Playwright 1.64.1: Chromium 156, Firefox 157, WebKit 27.2; Node.js 22 |
 
@@ -43,7 +44,7 @@
 | SQLite: версія, `ENABLE_FTS5`, `VACUUM INTO` (ADR-001) | `pass` — SQLite 3.50.1 на API 26 і 37, FTS5 є, `VACUUM INTO` працює | `pass` — SQLite 3.50.1 | `pass` — SQLite 3.54.1, FTS5 є, `VACUUM INTO` у другий файл пулу OPFS + `integrity_check` (Chromium, Firefox, WebKit) |
 | FTS5 uk/pl/en, `unicode61 remove_diacritics 2` | `pass` — 8/8 на API 26 і 37 | `pass` — 8/8 | `pass` — 6/6 у Chromium, Firefox, WebKit |
 | Міграція v1 → v2 зі snapshot (FIX-01): дані, нова FK, WAL-фрейми, відкат, збій на кожному кроці, нестача місця, відмова від downgrade | `pass` — API 26 і 37 | `pass` | Міграція v1 → v2 (Room AutoMigration на справжньому файлі v1, ті самі фікстури): `pass` у Chromium і Firefox — рядки, `integrity_check`, нова FK `section_id`, workspace, `local_seq`. Snapshot-захист FIX-01 на Web — `not_tested`, до релізу Web у Ф7 (ADR-004 п. 7) |
-| Спільні parser/timezone/recurrence fixtures | `not_tested` | `not_tested` | `not_tested` |
+| Спільні parser/timezone/recurrence fixtures | Timezone (TIME-01..04, TIME-08, ALL-DAY): `pass` на API 26 (tzdb 2017b) і API 37 (tzdb 2025c). Parser — Ф1a, recurrence (TIME-05..07) — Ф2 | Timezone: `pass`, JDK 21 (tzdb 2026e) | Timezone: `pass` у Chromium, Firefox, WebKit (`?selftest=time`, правила з `@js-joda/timezone`) |
 | supabase-kt (Auth, PostgREST/RPC, Realtime) | `not_tested` | `not_tested` | `not_tested` |
 | Браузерне сховище та ізоляція (§3.3.1) | — | — | `pass` — без COOP/COEP (`crossOriginIsolated = false`, звичайний статичний сервер); друга вкладка — зрозуміла помилка без втрати даних; очищення сховища → чистий старт; квота best-effort (`persisted = false`). WebKit у тимчасовому контексті (≈ приватне вікно) OPFS не дає; приватні режими й eviction — повна матриця Ф7 |
 | UI у браузері | — | — | `pass` — Chromium і Firefox: Compose стартує, задача з поля вводу збережена в `todo.db`. Потрібен WebGL 2: без нього застосунок показує текстове повідомлення (у CI Firefox працює під Xvfb із програмним GL, бо headless Firefox без GPU WebGL не має) |
@@ -73,5 +74,5 @@
 2. ~~Web spike~~ — `pass`, ADR-004 прийнято. Лишається Desktop runtime UI-перевірка.
 3. supabase-kt module matrix.
 4. `docs/UX_SPEC.md`, рядки в Compose resources (uk/en/pl), розбиття специфікації на `docs/*` за §13.4.
-5. Golden fixtures часу TIME-01..TIME-08 як виконувані тести (time-only subset).
+5. ~~Golden fixtures часу (time-only subset)~~ — TIME-01..04, TIME-08 виконуються на JVM, Android і в браузерах (`core/testing/TimeGoldenFixtures`); TIME-05..07 — разом із recurrence engine у Ф2.
 6. Перевірка на реальному телефоні (sqlite evidence + встановлення APK).
