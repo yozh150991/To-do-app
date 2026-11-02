@@ -1,11 +1,18 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page, type BrowserContext } from '@playwright/test';
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 
 // Ф0 Web spike (spec §3.3, §3.3.1; ADR-004): Room + androidx WebWorkerSQLiteDriver + SQLite WASM
 // with the OPFS SAHPool VFS, served without cross-origin isolation.
 
 const evidenceDir = process.env.EVIDENCE_DIR ?? '../build/reports/runtime-evidence';
+
+// Console noise that says nothing about the app: Skiko probes the GPU name, WebKit/Firefox refuse.
+const BENIGN_CONSOLE = [/WEBGL_debug_renderer_info not enabled/];
+
+// Typed into the real UI, then read back from todo.db by ?selftest=inspect.
+const UI_TASK = 'Typed in the web UI';
 
 interface SelfTest {
   status: string;
@@ -17,6 +24,42 @@ function evidence(name: string, lines: string[]): void {
   fs.writeFileSync(path.join(evidenceDir, name), lines.join('\n') + '\n');
 }
 
+/**
+ * Records everything the page says. kotlinx.coroutines reports uncaught coroutine exceptions with
+ * reportError(), putting the full Kotlin stack trace (causes and suppressed included) into error.stack;
+ * the init script prints it from inside the page, since not every browser hands it to Playwright intact.
+ */
+async function recordPage(page: Page, log: string[], errors: string[]): Promise<void> {
+  await page.addInitScript(() => {
+    window.addEventListener('error', (event) => {
+      const error = (event as ErrorEvent).error;
+      console.log(`[window error event] ${error?.name}: ${error?.message}\n${error?.stack ?? ''}`);
+    });
+    window.addEventListener('unhandledrejection', (event) => {
+      const reason = (event as PromiseRejectionEvent).reason;
+      console.log(`[unhandledrejection] ${reason?.name}: ${reason?.message}\n${reason?.stack ?? String(reason)}`);
+    });
+  });
+  page.on('pageerror', (error) => {
+    log.push(`[pageerror] ${error.name}: ${error.message}\n${error.stack ?? ''}`);
+    errors.push(`${error.name}: ${error.message}`);
+  });
+  page.on('console', (message) => {
+    const text = message.text();
+    log.push(`[${message.type()}] ${text}`);
+    if (message.type() === 'error' && !BENIGN_CONSOLE.some((pattern) => pattern.test(text))) errors.push(text);
+  });
+}
+
+/** Errors first: the CI report keeps only the first 6000 characters of each evidence file. */
+function pageLog(log: string[]): string[] {
+  const isError = (line: string) => /^\[(pageerror|window error event|unhandledrejection|error)\]/.test(line);
+  return [
+    'page errors:', ...log.filter(isError).map((line) => `  ${line}`),
+    'page log:', ...log.filter((line) => !isError(line)).map((line) => `  ${line}`),
+  ];
+}
+
 async function selfTest(page: Page, query: string): Promise<SelfTest> {
   await page.goto(`/index.html?${query}`);
   const output = page.locator('#selftest[data-status]');
@@ -25,9 +68,16 @@ async function selfTest(page: Page, query: string): Promise<SelfTest> {
   return { status: (await output.getAttribute('data-status')) ?? 'fail', json: JSON.parse(text) };
 }
 
+/** Leaves the page so its worker ends and the OPFS access handles are released. */
+async function leave(page: Page): Promise<void> {
+  await page.goto('about:blank');
+  await page.waitForTimeout(500);
+}
+
 test('tasks persist in OPFS across reload and a new tab', async ({ page, context, browserName }) => {
-  const consoleLines: string[] = [];
-  page.on('console', (message) => consoleLines.push(`[${message.type()}] ${message.text()}`));
+  const log: string[] = [];
+  const errors: string[] = [];
+  await recordPage(page, log, errors);
   const lines: string[] = [`browser: ${browserName} ${context.browser()?.version() ?? ''}`];
 
   try {
@@ -44,7 +94,7 @@ test('tasks persist in OPFS across reload and a new tab', async ({ page, context
     await second.close();
 
     // The first tab navigates away and comes back: the data must still be there.
-    await page.goto('about:blank');
+    await leave(page);
     const verify = await selfTest(page, `selftest=verify&workspace=${workspace}`);
     lines.push(`verify after reload: ${verify.status} ${JSON.stringify(verify.json)}`);
     expect(verify.status, JSON.stringify(verify.json)).toBe('pass');
@@ -56,21 +106,75 @@ test('tasks persist in OPFS across reload and a new tab', async ({ page, context
     lines.push(`new tab after closing the old one: ${takeover.status} ${JSON.stringify(takeover.json)}`);
     expect(takeover.status, JSON.stringify(takeover.json)).toBe('pass');
   } finally {
-    lines.push('console:', ...consoleLines.map((line) => `  ${line}`));
+    lines.push(...pageLog(log));
     evidence(`web-${browserName}.txt`, lines);
   }
 });
 
-test('app UI starts and renders', async ({ page, browserName }) => {
+test('tasks persist after the browser is restarted', async ({ playwright, browserName }, testInfo) => {
+  // A persistent profile on disk, closed and launched again: what a real browser restart does.
+  // Also shows whether WebKit offers OPFS outside Playwright's ephemeral contexts.
+  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), `todo-profile-${browserName}-`));
+  const baseURL = testInfo.project.use.baseURL ?? 'http://127.0.0.1:8090';
+  const launch = () => playwright[browserName].launchPersistentContext(userDataDir, { baseURL });
+  const lines: string[] = [`browser: ${browserName}`, `profile: ${userDataDir}`];
+  const log: string[] = [];
   const errors: string[] = [];
-  page.on('pageerror', (error) => errors.push(String(error)));
-  page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(message.text());
-  });
-  await page.goto('/index.html');
-  await expect(page.locator('canvas').first()).toBeVisible({ timeout: 120_000 });
-  await page.waitForTimeout(3_000);
-  fs.mkdirSync(evidenceDir, { recursive: true });
-  await page.screenshot({ path: path.join(evidenceDir, `ui-${browserName}.png`) });
-  expect(errors, errors.join('\n')).toEqual([]);
+  let context: BrowserContext | undefined;
+
+  try {
+    context = await launch();
+    let page = context.pages()[0] ?? (await context.newPage());
+    await recordPage(page, log, errors);
+    const write = await selfTest(page, 'selftest=write');
+    lines.push(`write: ${write.status} ${JSON.stringify(write.json)}`);
+    expect(write.status, JSON.stringify(write.json)).toBe('pass');
+    await context.close();
+    context = undefined;
+
+    context = await launch();
+    page = context.pages()[0] ?? (await context.newPage());
+    await recordPage(page, log, errors);
+    const verify = await selfTest(page, `selftest=verify&workspace=${String(write.json.workspace)}`);
+    lines.push(`verify after restart: ${verify.status} ${JSON.stringify(verify.json)}`);
+    expect(verify.status, JSON.stringify(verify.json)).toBe('pass');
+  } finally {
+    await context?.close();
+    fs.rmSync(userDataDir, { recursive: true, force: true });
+    lines.push(...pageLog(log));
+    evidence(`restart-${browserName}.txt`, lines);
+  }
+});
+
+test('app UI starts, renders and saves a typed task', async ({ page, browserName }) => {
+  const log: string[] = [];
+  const errors: string[] = [];
+  const lines: string[] = [`browser: ${browserName}`];
+  await recordPage(page, log, errors);
+
+  try {
+    await page.goto('/index.html');
+    await expect(page.locator('canvas').first()).toBeVisible({ timeout: 120_000 });
+    await page.waitForTimeout(3_000);
+    fs.mkdirSync(evidenceDir, { recursive: true });
+    await page.screenshot({ path: path.join(evidenceDir, `ui-${browserName}.png`) });
+    lines.push(`errors after start: ${JSON.stringify(errors)}`);
+
+    // The new-task field sits under the 64dp top bar, 16dp from the left edge (InboxScreen).
+    await page.mouse.click(200, 92);
+    await page.keyboard.type(UI_TASK);
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(2_000);
+    await page.screenshot({ path: path.join(evidenceDir, `ui-${browserName}-typed.png`) });
+
+    await leave(page);
+    const inspect = await selfTest(page, 'selftest=inspect');
+    lines.push(`todo.db after typing: ${inspect.status} ${JSON.stringify(inspect.json)}`);
+    expect(errors, errors.join('\n')).toEqual([]);
+    expect(inspect.status, JSON.stringify(inspect.json)).toBe('pass');
+    expect(inspect.json.open, JSON.stringify(inspect.json)).toEqual([UI_TASK]);
+  } finally {
+    lines.push(...pageLog(log));
+    evidence(`ui-${browserName}.txt`, lines);
+  }
 });

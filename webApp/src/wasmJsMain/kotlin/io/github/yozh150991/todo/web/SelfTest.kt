@@ -23,9 +23,11 @@ import kotlinx.serialization.json.putJsonObject
  *
  *   index.html?selftest=write                 → creates the workspace and data in OPFS
  *   index.html?selftest=verify&workspace=<id> → after a reload / in a new tab: data is still there
+ *   index.html?selftest=inspect               → the Inbox of the app's own todo.db,
+ *                                               used after the e2e test typed a task into the real UI
  *
  * The result is written as JSON into <pre id="selftest" data-status="pass|fail">.
- * A separate database file keeps the self-test away from the app's own todo.db.
+ * write/verify use a separate database file, away from the app's own todo.db.
  */
 
 private const val SELF_TEST_DB = "selftest.db"
@@ -81,7 +83,8 @@ private suspend fun AppDatabase.ftsCounts(): Map<String, Long> =
 
 private suspend fun runSelfTest(phase: String, expectedWorkspace: String?): JsonObject = buildJsonObject {
     val checks = Checks()
-    val database = createWebAppDatabase(createWebDriver(), SELF_TEST_DB)
+    val fileName = if (phase == "inspect") AppDatabase.DEFAULT_FILE_NAME else SELF_TEST_DB
+    val database = createWebAppDatabase(createWebDriver(), fileName)
     val store = LocalStore(database)
     val repository = TaskRepository(store)
 
@@ -96,6 +99,7 @@ private suspend fun runSelfTest(phase: String, expectedWorkspace: String?): Json
     when (phase) {
         "write" -> writePhase(store, repository, database, checks)
         "verify" -> verifyPhase(store, repository, database, checks, expectedWorkspace, workspace.workspaceId)
+        "inspect" -> inspectPhase(store, repository)
         else -> checks.check("known phase", false, phase)
     }
 
@@ -178,6 +182,15 @@ private suspend fun JsonObjectBuilder.verifyPhase(
     checks.check("local_seq continues", seqsAfter.last() == seqsBefore.size + 1L, seqsAfter.toString())
     put("tasks", store.tasks.count())
     putFts(database, checks)
+}
+
+private suspend fun JsonObjectBuilder.inspectPhase(store: LocalStore, repository: TaskRepository) {
+    val inboxId = repository.workspace().inboxId
+    putJsonArray("open") { store.tasks.observeOpenInProject(inboxId).first().forEach { add(JsonPrimitive(it.content)) } }
+    putJsonArray("completed") {
+        store.tasks.observeCompletedInProject(inboxId).first().forEach { add(JsonPrimitive(it.content)) }
+    }
+    put("outbox", store.outbox.all().size)
 }
 
 private suspend fun JsonObjectBuilder.putFts(database: AppDatabase, checks: Checks) {
