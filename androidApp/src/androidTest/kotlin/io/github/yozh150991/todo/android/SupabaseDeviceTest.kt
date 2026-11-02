@@ -26,9 +26,9 @@ class SupabaseDeviceTest {
         assumeTrue("no local Supabase stack for this run", !url.isNullOrBlank() && !key.isNullOrBlank())
 
         val platform = "Android API ${Build.VERSION.SDK_INT}"
-        val checks = SupabaseProbe.run(url!!, key!!, platform)
         Log.i(EVIDENCE_TAG, "[supabase, $platform] $url")
-        checks.forEach { Log.i(EVIDENCE_TAG, "[supabase, $platform] $it") }
+        // Each result is logged as soon as it is known: a hung run still leaves evidence in logcat.
+        val checks = SupabaseProbe.run(url!!, key!!, platform) { Log.i(EVIDENCE_TAG, "[supabase, $platform] $it") }
         assertTrue(checks.filterNot { it.passed }.joinToString("\n"), checks.all { it.passed })
     }
 

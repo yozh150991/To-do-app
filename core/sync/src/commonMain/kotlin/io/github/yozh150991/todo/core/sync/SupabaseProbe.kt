@@ -17,6 +17,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -38,6 +39,8 @@ object SupabaseProbe {
         override fun toString(): String = "$module / $name: ${if (passed) "pass" else "FAIL"} — $details"
     }
 
+    private val CHECK_TIMEOUT = 60.seconds
+
     @Serializable
     private data class NewProbeRow(val content: String)
 
@@ -48,17 +51,29 @@ object SupabaseProbe {
         @SerialName("owner_id") val ownerId: String,
     )
 
-    suspend fun run(url: String, anonKey: String, platform: String): List<Check> {
+    /**
+     * Runs every check; [progress] gets each result as soon as it is known, so a run that is killed
+     * still leaves evidence. A check that does not finish in [CHECK_TIMEOUT] fails instead of hanging.
+     */
+    suspend fun run(
+        url: String,
+        anonKey: String,
+        platform: String,
+        progress: (Check) -> Unit = {},
+    ): List<Check> {
         val checks = mutableListOf<Check>()
         suspend fun check(module: String, name: String, block: suspend () -> Pair<Boolean, String>) {
-            val result = runCatching { block() }
-            checks += result.fold(
+            val result = runCatching { withTimeout(CHECK_TIMEOUT) { block() } }
+            val check = result.fold(
                 onSuccess = { (passed, details) -> Check(module, name, passed, details) },
                 onFailure = { e -> Check(module, name, false, "${e::class.simpleName}: ${e.message?.take(300)}") },
             )
+            checks += check
+            progress(check)
         }
 
         val client = createSupabaseClient(supabaseUrl = url, supabaseKey = anonKey) {
+            requestTimeout = 20.seconds
             // Session in memory: the probe must not leave a stored login on the device or in the browser.
             install(Auth) { minimalConfig() }
             install(Postgrest)
@@ -116,7 +131,7 @@ object SupabaseProbe {
                 val received = async {
                     inserts.first { it.record["content"]?.jsonPrimitive?.content == marker }
                 }
-                channel.subscribe(blockUntilSubscribed = true)
+                withTimeout(20.seconds) { channel.subscribe(blockUntilSubscribed = true) }
                 // postgres_changes is registered a moment after "subscribed"; retry the insert a few times.
                 var attempts = 0
                 var action: PostgresAction.Insert? = null
@@ -137,7 +152,7 @@ object SupabaseProbe {
             val passed = result.isFailure || result.getOrNull().isNullOrEmpty()
             passed to (result.exceptionOrNull()?.let { "refused: ${it::class.simpleName}" } ?: "${result.getOrNull()?.size} rows")
         }
-        client.close()
+        runCatching { withTimeout(10.seconds) { client.close() } }
         return checks
     }
 }
