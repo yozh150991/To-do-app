@@ -168,6 +168,16 @@ def main():
                 out.append(f"  - `{os.path.basename(path)}` — {os.path.getsize(path) / 1024:.0f} KiB")
         out.append("")
 
+    # Kotlin/Wasm writes the lock file it resolved to build/wasm/yarn.lock; with a stale committed lock
+    # the build stops at kotlinWasmStoreYarnLock, so show the resolved one to commit.
+    for generated, committed in (("build/wasm/yarn.lock", "kotlin-js-store/wasm/yarn.lock"),):
+        if os.path.isfile(generated) and read(generated) != read(committed):
+            out += [
+                "#### Resolved yarn.lock differs from the committed one",
+                f"Copy `{generated}` to `{committed}`:",
+                "<details><summary><code>" + committed + "</code></summary>", "", "```text", read(generated), "```", "</details>", "",
+            ]
+
     status = subprocess.run(
         ["git", "status", "--porcelain", "--untracked-files=all", "--", "core/database/schemas", "kotlin-js-store"],
         capture_output=True, text=True, check=False,

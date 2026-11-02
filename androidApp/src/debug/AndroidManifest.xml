@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug builds only. The Ф0 supabase-kt probe (androidTest SupabaseDeviceTest) talks to a local
+  Supabase stack over plain HTTP (127.0.0.1 forwarded by adb reverse, or 10.0.2.2). The release app gets network
+  access with the sync engine in phase Ф5a.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <application android:networkSecurityConfig="@xml/network_security_config_debug" />
+</manifest>

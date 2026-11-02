@@ -1,0 +1,48 @@
+# Local Supabase stack for the Ф0 supabase-kt module matrix (CI job "Supabase modules").
+# Started with `supabase start` (Supabase CLI); not the production project, which is phase Ф5a.
+project_id = "todo-app-f0"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 17
+
+[db.seed]
+enabled = false
+
+[realtime]
+enabled = true
+
+[studio]
+enabled = false
+
+[inbucket]
+enabled = false
+
+[storage]
+enabled = false
+
+[edge_runtime]
+enabled = false
+
+[analytics]
+enabled = false
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:8090"
+additional_redirect_urls = []
+jwt_expiry = 3600
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+# Local only: sign-up logs in at once, no confirmation mail.
+enable_confirmations = false
