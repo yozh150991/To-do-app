@@ -12,6 +12,8 @@
 - Room 3 schema v1: `local_workspace`, `project`, `task`, `task_activity`, `outbox_operation`, `external_identity` (`docs/DATA_MODEL.md`).
 - `TaskRepository`: створення, перейменування, виконання/повернення, м'яке видалення/відновлення; кожна зміна пише сутність, activity й outbox в одній транзакції.
 - Мінімальний екран Inbox (Android і Desktop).
-- CI на GitHub Actions: JVM-тести, debug APK, Desktop JAR, звіт із runtime-доказами в PR.
+- Schema v2: `section`, `label`, `task_label`, зовнішній ключ `task.section_id` (AutoMigration 1 → 2).
+- Безпечне оновлення схеми (FIX-01): `VACUUM INTO` snapshot з перевіркою й sha256, маркер незавершеного оновлення, автоматичний відкат, перевірка вільного місця, відмова від downgrade. База відкривається один раз поза головним потоком; помилка відкриття показується в UI.
+- CI на GitHub Actions: JVM-тести, debug APK, Desktop JAR, instrumented-тести на емуляторах API 26 і API 37, зведений звіт із runtime-доказами в PR.
 
 > Перший запис про реальний реліз створюється лише після збірки, перевірки й публікації артефактів. Не переносити сюди історичні правила зі специфікації.

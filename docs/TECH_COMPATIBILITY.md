@@ -31,33 +31,42 @@
 
 ## Матриця
 
-Дата перевірки: 01.11.2026. Коміт: `9bd1c420b6` (PR #1).
+Дата перевірки: 01.11.2026. Коміт: `dbca137361` (PR #2). Емулятори: Android 8.0 (API 26, `default` x86_64) і Android 17 (API 37, `google_atd` x86_64), запуск скриптом `tools/ci/run-emulator.sh`.
 
 | Критерій | Android | Desktop / JVM | Web / Wasm |
 | --- | --- | --- | --- |
-| Компіляція на одному version catalog | `pass` — debug APK зібрано (17.75 MiB, усі ABI) | `pass` — `desktopApp-jvm.jar` | `not_tested` — таргет ще не додано |
-| Room 3 + `BundledSQLiteDriver`: CRUD, транзакція, outbox, persist після reopen | `compile_only` — потрібен тест на емуляторі | `pass` — 6 тестів `core:database` + 12 `core:domain` на файловій БД | `not_tested` |
-| SQLite: версія, `ENABLE_FTS5`, `VACUUM INTO` (ADR-001) | `not_tested` — API 26 і актуальний емулятор | `pass` — SQLite 3.50.1, FTS5 є, `VACUUM INTO` створює копію | `not_tested` (WASM-збірка worker) |
-| FTS5 uk/pl/en, `unicode61 remove_diacritics 2` | `not_tested` | `pass` — 8/8 перевірок (точний збіг, регістр кирилиці, префікс, `prad` → `prąd`) | `not_tested` |
-| WAL-журнал Room | `not_tested` | `pass` — `journal_mode = wal` | — |
-| Міграція v1 → v2 + WAL-safe snapshot (FIX-01) | `not_tested` | `not_tested` | `not_tested` |
+| Компіляція на одному version catalog | `pass` — debug APK (17.80 MiB, усі ABI) | `pass` — `desktopApp-jvm.jar` | `not_tested` — таргет ще не додано |
+| Room 3 + `BundledSQLiteDriver`: CRUD, транзакція, outbox, persist після reopen | `pass` — API 26 і API 37, 11/11 сценаріїв | `pass` — ті самі 11 сценаріїв + 17 тестів `core:database`/`core:domain` | `not_tested` |
+| SQLite: версія, `ENABLE_FTS5`, `VACUUM INTO` (ADR-001) | `pass` — SQLite 3.50.1 на API 26 і 37, FTS5 є, `VACUUM INTO` працює | `pass` — SQLite 3.50.1 | `not_tested` (WASM-збірка worker) |
+| FTS5 uk/pl/en, `unicode61 remove_diacritics 2` | `pass` — 8/8 на API 26 і 37 | `pass` — 8/8 | `not_tested` |
+| Міграція v1 → v2 зі snapshot (FIX-01): дані, нова FK, WAL-фрейми, відкат, збій на кожному кроці, нестача місця, відмова від downgrade | `pass` — API 26 і 37 | `pass` | `not_tested` |
 | Спільні parser/timezone/recurrence fixtures | `not_tested` | `not_tested` | `not_tested` |
 | supabase-kt (Auth, PostgREST/RPC, Realtime) | `not_tested` | `not_tested` | `not_tested` |
 | Release/CI | Debug APK у CI; release-підпис `not_tested` | Runnable JAR; запуск вікна в CI не перевіряється (headless) | `not_tested` |
 
+**Примітка про емулятор API 37.** Пакети системних образів Android 17 мають мінорний рівень у назві (`system-images;android-37.0;…`). Повний образ `google_apis` не дійшов до `boot_completed` на GitHub-hosted runner, тому для API 37 використовується ATD-образ (`google_atd`), призначений для автоматизованих тестів. Для тестів шару даних різниці немає; UI-тести на повному образі — окрема перевірка пізніше.
+
 ## Висновки на зараз
 
-- **Desktop/JVM:** шар даних пройшов runtime-перевірку (persist після закриття й повторного відкриття, FK, унікальність Inbox/workspace, атомарність entity + activity + outbox, безперервний `local_seq` при 100 паралельних записах). UI-вікно не перевірене автоматично.
-- **Android:** збірка є, runtime-доказу немає. Ф0 для Android закривається лише після instrumented-тестів на емуляторі API 26 і актуальному API в CI.
+- **Android:** шар даних пройшов runtime-перевірку на мінімальному (API 26) і актуальному (API 37) Android: CRUD і збереження після перезапуску, атомарність entity + activity + outbox, безперервний `local_seq` при 50 паралельних записах, безпечне оновлення схеми з відкатом. Не перевірено на реальному телефоні.
+- **Desktop/JVM:** ті самі сценарії `pass`. UI-вікно не перевіряється автоматично.
 - **Web:** ще не почато; окремий spike за §3.3.1 (worker + OPFS або IndexedDB fallback).
+
+## Стан gate ADR-001
+
+| Пункт | Стан |
+| --- | --- |
+| `sqlite_version()` і `compile_options` на Android API 26 і JVM | Виконано в CI; на реальному телефоні — ні |
+| FTS5 uk/pl/en на API 26 і актуальному Android | Виконано (API 26, API 37) |
+| `VACUUM INTO` під записами у WAL, `integrity_check`, semantic comparison, crash і нестача місця | Виконано (сценарії `walFramesAreCapturedBySnapshot`, `interruptedUpgradeIsRecovered`, `insufficientSpaceLeavesDatabaseUntouched`) |
+| Приріст розміру APK і рішення щодо ABI split | Debug APK з усіма ABI — 17.80 MiB; рішення приймається разом із release-збіркою |
 
 ## Що залишилось для gate Ф0
 
-1. Android instrumented-тести на емуляторах API 26 і 37: CRUD, перезапуск, транзакція з outbox, SQLite/FTS5 evidence.
-2. Міграція v1 → v2 і WAL-safe snapshot перед міграцією з `integrity_check`, checksum і сценаріями збою (FIX-01, ADR-001).
-3. Release keystore у двох місцях, підписана збірка в CI лише з захищеної гілки/тегу, перевірка оновлення v0.0.1 → v0.0.2 (§3.4).
-4. ADR каналу оновлень (Obtainium або вбудована перевірка).
-5. Web spike і рішення pass/blocked з ADR; Desktop runtime UI-перевірка.
-6. supabase-kt module matrix.
-7. `docs/UX_SPEC.md`, рядки в Compose resources (uk/en/pl), розбиття специфікації на `docs/*` за §13.4.
-8. Golden fixtures часу TIME-01..TIME-08 як виконувані тести (time-only subset).
+1. Release keystore у двох місцях, підписана збірка в CI лише з захищеної гілки/тегу, перевірка оновлення v0.0.1 → v0.0.2 поверх (§3.4); розмір release APK і ABI split.
+2. ADR каналу оновлень (Obtainium або вбудована перевірка).
+3. Web spike і рішення pass/blocked з ADR; Desktop runtime UI-перевірка.
+4. supabase-kt module matrix.
+5. `docs/UX_SPEC.md`, рядки в Compose resources (uk/en/pl), розбиття специфікації на `docs/*` за §13.4.
+6. Golden fixtures часу TIME-01..TIME-08 як виконувані тести (time-only subset).
+7. Перевірка на реальному телефоні (sqlite evidence + встановлення APK).

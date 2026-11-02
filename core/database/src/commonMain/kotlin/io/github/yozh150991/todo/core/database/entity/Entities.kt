@@ -7,7 +7,7 @@ import androidx.room3.Index
 import androidx.room3.PrimaryKey
 
 /*
- * Schema v1 (spec v2.6.1 §4, phase Ф0).
+ * Schema v2 (spec v2.6.1 §4, phase Ф0): v1 + `section`, `label`, `task_label`, FK `task.section_id`.
  *
  * Storage conventions (docs/DATA_MODEL.md):
  * - IDs are client-generated UUID strings.
@@ -86,10 +86,17 @@ data class ProjectEntity(
             parentColumns = ["id"],
             childColumns = ["parent_id"],
         ),
+        // Added in schema v2 (auto-migration rebuilds the table; FK checked after copy).
+        ForeignKey(
+            entity = SectionEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["section_id"],
+        ),
     ],
     indices = [
         Index(value = ["project_id"]),
         Index(value = ["parent_id"]),
+        Index(value = ["section_id"]),
         Index(value = ["due_date"]),
         Index(value = ["deadline"]),
         Index(value = ["deleted_at"]),
@@ -98,7 +105,6 @@ data class ProjectEntity(
 data class TaskEntity(
     @PrimaryKey @ColumnInfo(name = "id") val id: String,
     @ColumnInfo(name = "project_id") val projectId: String,
-    /** No FK until the `section` table arrives in phase Ф1b. */
     @ColumnInfo(name = "section_id") val sectionId: String?,
     @ColumnInfo(name = "parent_id") val parentId: String?,
     @ColumnInfo(name = "child_order") val childOrder: String,
@@ -186,4 +192,70 @@ data class ExternalIdentityEntity(
     @ColumnInfo(name = "source_hash") val sourceHash: String,
     @ColumnInfo(name = "import_version") val importVersion: Int,
     @ColumnInfo(name = "last_seen_at") val lastSeenAt: Long,
+)
+
+/** spec §4.2 `Section` (schema v2). A task's section must belong to the task's project (enforced in the repository). */
+@Entity(
+    tableName = "section",
+    foreignKeys = [
+        ForeignKey(
+            entity = ProjectEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["project_id"],
+        ),
+    ],
+    indices = [Index(value = ["project_id"]), Index(value = ["deleted_at"])],
+)
+data class SectionEntity(
+    @PrimaryKey @ColumnInfo(name = "id") val id: String,
+    @ColumnInfo(name = "project_id") val projectId: String,
+    @ColumnInfo(name = "name") val name: String,
+    @ColumnInfo(name = "description") val description: String,
+    @ColumnInfo(name = "section_order") val sectionOrder: String,
+    @ColumnInfo(name = "collapsed") val collapsed: Boolean,
+    @ColumnInfo(name = "revision") val revision: Long?,
+    @ColumnInfo(name = "created_at") val createdAt: Long,
+    @ColumnInfo(name = "updated_at") val updatedAt: Long,
+    @ColumnInfo(name = "deleted_at") val deletedAt: Long?,
+)
+
+/** spec §4.2 `Label` (schema v2). Names are not unique: duplicates are merged explicitly (spec §5.2). */
+@Entity(
+    tableName = "label",
+    indices = [Index(value = ["deleted_at"])],
+)
+data class LabelEntity(
+    @PrimaryKey @ColumnInfo(name = "id") val id: String,
+    @ColumnInfo(name = "name") val name: String,
+    @ColumnInfo(name = "color") val color: String?,
+    @ColumnInfo(name = "item_order") val itemOrder: String,
+    @ColumnInfo(name = "is_favorite") val isFavorite: Boolean,
+    @ColumnInfo(name = "revision") val revision: Long?,
+    @ColumnInfo(name = "created_at") val createdAt: Long,
+    @ColumnInfo(name = "updated_at") val updatedAt: Long,
+    @ColumnInfo(name = "deleted_at") val deletedAt: Long?,
+)
+
+/** spec §4.2 `TaskLabel` (schema v2): a unique pair; adding/removing is an operation, not a row overwrite. */
+@Entity(
+    tableName = "task_label",
+    primaryKeys = ["task_id", "label_id"],
+    foreignKeys = [
+        ForeignKey(
+            entity = TaskEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["task_id"],
+        ),
+        ForeignKey(
+            entity = LabelEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["label_id"],
+        ),
+    ],
+    indices = [Index(value = ["label_id"])],
+)
+data class TaskLabelEntity(
+    @ColumnInfo(name = "task_id") val taskId: String,
+    @ColumnInfo(name = "label_id") val labelId: String,
+    @ColumnInfo(name = "created_at") val createdAt: Long,
 )

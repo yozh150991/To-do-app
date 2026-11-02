@@ -14,16 +14,13 @@ concurrency:
 
 jobs:
   build:
-    name: Build and test (Android + JVM)
+    name: Build and JVM tests
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    permissions:
-      contents: read
-      pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
@@ -39,26 +36,20 @@ jobs:
             :core:model:jvmTest \
             :core:database:jvmTest \
             :core:domain:jvmTest \
+            :core:testing:jvmTest \
             :androidApp:assembleDebug \
             :desktopApp:jvmJar \
             2>&1 | tee build-log.txt
 
-      - name: Compose report
-        if: always()
-        run: |
-          python3 tools/ci/report.py build-log.txt "${{ steps.gradle.outcome }}" "${{ github.event.pull_request.head.sha || github.sha }}" > ci-report.md
-          cat ci-report.md >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload artifacts
+      - name: Upload build outputs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ci-${{ github.run_number }}
+          name: build-${{ github.run_number }}
           if-no-files-found: ignore
           retention-days: 14
           path: |
             build-log.txt
-            ci-report.md
             androidApp/build/outputs/apk/**/*.apk
             desktopApp/build/libs/*.jar
             **/build/reports/tests/**
@@ -66,10 +57,112 @@ jobs:
             **/build/test-results/**/*.xml
             core/database/schemas/**
 
-      # Logs of Actions runs are not reachable from every reviewer environment, so the
-      # evidence is mirrored into a single PR comment that is updated on every run.
+  android-device:
+    name: Android emulator API ${{ matrix.api }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - api: 26
+            image-api: "26"
+            target: default
+          # Since Android 17 the SDK names system images with a minor level: android-37.0.
+          # ATD ("automated test device") images are headless test images built for CI;
+          # the full google_apis API 37 image did not reach boot_completed on hosted runners.
+          - api: 37
+            image-api: "37.0"
+            target: google_atd
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      # Recorded in the device log so the PR report shows which images exist when the emulator fails.
+      - name: List system images
+        run: |
+          {
+            echo "== system images for API ${{ matrix.api }} (sdkmanager --list) =="
+            yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --list 2>/dev/null \
+              | grep -E "system-images;android-${{ matrix.api }}[;.-]" | sed 's/ *|.*//' | sort -u || true
+          } | tee device-${{ matrix.api }}-log.txt
+
+      # Compile before the emulator boots so emulator minutes are spent on tests only.
+      - name: Assemble app and test APKs
+        run: ./gradlew --stacktrace :androidApp:assembleDebug :androidApp:assembleDebugAndroidTest
+
+      # Own script instead of a packaged emulator action: every install/boot step lands in the
+      # device log, which the PR report shows when a run fails.
+      - name: Run instrumented tests on the emulator
+        run: bash tools/ci/run-emulator.sh ${{ matrix.api }} ${{ matrix.image-api }} ${{ matrix.target }}
+
+      - name: Upload device outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: device-${{ matrix.api }}-${{ github.run_number }}
+          if-no-files-found: ignore
+          retention-days: 14
+          path: |
+            device-${{ matrix.api }}-log.txt
+            device-${{ matrix.api }}-result.txt
+            device-${{ matrix.api }}-emulator.txt
+            androidApp/build/outputs/androidTest-results/**
+            androidApp/build/reports/androidTests/**
+            androidApp/build/reports/runtime-evidence/**
+
+      - name: Fail if instrumented tests failed
+        run: test "$(cat device-${{ matrix.api }}-result.txt 2>/dev/null || echo 1)" = "0"
+
+  # GitHub Actions logs are not reachable from every reviewer environment, so all evidence is
+  # mirrored into one PR comment that is updated on every run.
+  report:
+    name: PR report
+    needs: [build, android-device]
+    if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: .
+          merge-multiple: true
+
+      - name: Compose report
+        run: |
+          device() {
+            if [ -f "device-$1-result.txt" ]; then
+              if [ "$(cat "device-$1-result.txt")" = "0" ]; then echo success; else echo failure; fi
+            else
+              echo "${{ needs.android-device.result }} (no result file)"
+            fi
+          }
+          python3 tools/ci/report.py \
+            --sha "${{ github.event.pull_request.head.sha }}" \
+            --job "Build and JVM tests=${{ needs.build.result }}=build-log.txt" \
+            --job "Android emulator API 26=$(device 26)=device-26-log.txt" \
+            --job "Android emulator API 37=$(device 37)=device-37-log.txt" \
+            > ci-report.md
+          cat ci-report.md >> "$GITHUB_STEP_SUMMARY"
+
       - name: Post report to PR
-        if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}

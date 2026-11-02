@@ -1,6 +1,7 @@
 package io.github.yozh150991.todo.core.domain
 
 import io.github.yozh150991.todo.core.database.LocalStore
+import io.github.yozh150991.todo.core.database.LocalStoreProvider
 import io.github.yozh150991.todo.core.database.entity.LocalWorkspaceEntity
 import io.github.yozh150991.todo.core.database.entity.TaskActivityEntity
 import io.github.yozh150991.todo.core.database.entity.TaskEntity
@@ -40,12 +41,22 @@ import kotlin.time.Instant
  * The UI, widgets and notification actions must go through this class; nothing writes Room directly.
  */
 class TaskRepository(
-    private val store: LocalStore,
+    private val stores: LocalStoreProvider,
     private val clock: Clock = Clock.System,
     private val ids: IdGenerator = RandomUuidGenerator,
     /** Separate from [ids] so tests can force an outbox failure after the entity row was written. */
     private val operationIds: IdGenerator = ids,
 ) {
+    /** Convenience for an already opened store (tests, tools). */
+    constructor(
+        store: LocalStore,
+        clock: Clock = Clock.System,
+        ids: IdGenerator = RandomUuidGenerator,
+        operationIds: IdGenerator = ids,
+    ) : this(LocalStoreProvider.of(store), clock, ids, operationIds)
+
+    private suspend fun store(): LocalStore = stores.get()
+
     private val bootstrapMutex = Mutex()
     private var cachedWorkspace: LocalWorkspace? = null
 
@@ -56,6 +67,7 @@ class TaskRepository(
      */
     suspend fun workspace(): LocalWorkspace = bootstrapMutex.withLock {
         cachedWorkspace ?: run {
+            val store = store()
             if (store.workspaces.get() == null) {
                 store.write { if (workspaces.get() == null) createWorkspace() }
             }
@@ -65,17 +77,19 @@ class TaskRepository(
 
     fun observeInbox(): Flow<List<Task>> = flow { emitAll(observeOpenTasks(workspace().inboxId)) }
 
-    fun observeOpenTasks(projectId: String): Flow<List<Task>> =
-        store.tasks.observeOpenInProject(projectId).map { rows -> rows.map(TaskEntity::toDomain) }
+    fun observeOpenTasks(projectId: String): Flow<List<Task>> = flow {
+        emitAll(store().tasks.observeOpenInProject(projectId).map { rows -> rows.map(TaskEntity::toDomain) })
+    }
 
-    fun observeCompletedTasks(projectId: String): Flow<List<Task>> =
-        store.tasks.observeCompletedInProject(projectId).map { rows -> rows.map(TaskEntity::toDomain) }
+    fun observeCompletedTasks(projectId: String): Flow<List<Task>> = flow {
+        emitAll(store().tasks.observeCompletedInProject(projectId).map { rows -> rows.map(TaskEntity::toDomain) })
+    }
 
-    fun observePendingOperationCount(): Flow<Int> = store.outbox.observePendingCount()
+    fun observePendingOperationCount(): Flow<Int> = flow { emitAll(store().outbox.observePendingCount()) }
 
-    suspend fun getTask(id: String): Task? = store.tasks.getById(id)?.toDomain()
+    suspend fun getTask(id: String): Task? = store().tasks.getById(id)?.toDomain()
 
-    suspend fun pendingOperations(): List<OutboxOperation> = store.outbox.pending().map { it.toDomain() }
+    suspend fun pendingOperations(): List<OutboxOperation> = store().outbox.pending().map { it.toDomain() }
 
     suspend fun createTask(
         content: String,
@@ -85,7 +99,7 @@ class TaskRepository(
     ): Task {
         val normalized = TaskRules.normalizeContent(content)
         val ws = workspace()
-        return store.write {
+        return store().write {
             val targetProjectId = projectId ?: ws.inboxId
             val project = projects.getById(targetProjectId)
             if (project == null || project.deletedAt != null) {
@@ -113,7 +127,7 @@ class TaskRepository(
     suspend fun updateContent(taskId: String, content: String): Boolean {
         val normalized = TaskRules.normalizeContent(content)
         val ws = workspace()
-        return store.write {
+        return store().write {
             val row = requireLiveTask(taskId)
             if (row.content == normalized) return@write false
             val now = clock.now()
@@ -131,7 +145,7 @@ class TaskRepository(
     /** Completes a one-off task. Completing an already completed task is a no-op and returns false. */
     suspend fun complete(taskId: String): Boolean {
         val ws = workspace()
-        return store.write {
+        return store().write {
             val row = requireLiveTask(taskId)
             if (row.rrule != null) {
                 // Invariant §2.1.13: recurring tasks are completed by the recurrence engine (phase Ф2) only.
@@ -154,7 +168,7 @@ class TaskRepository(
     /** Reopens a completed task. Returns false when the task was not completed. */
     suspend fun uncomplete(taskId: String): Boolean {
         val ws = workspace()
-        return store.write {
+        return store().write {
             val row = requireLiveTask(taskId)
             val completedAt = row.completedAt ?: return@write false
             val now = clock.now()
@@ -174,7 +188,7 @@ class TaskRepository(
     /** Soft delete (spec §4.3): the row stays for Trash/Undo and sync tombstones. */
     suspend fun delete(taskId: String): Boolean {
         val ws = workspace()
-        return store.write {
+        return store().write {
             val row = tasks.getById(taskId) ?: throw ValidationException("Task $taskId does not exist")
             if (row.deletedAt != null) return@write false
             val now = clock.now()
@@ -191,7 +205,7 @@ class TaskRepository(
 
     suspend fun restore(taskId: String): Boolean {
         val ws = workspace()
-        return store.write {
+        return store().write {
             val row = tasks.getById(taskId) ?: throw ValidationException("Task $taskId does not exist")
             val deletedAt = row.deletedAt ?: return@write false
             val now = clock.now()
