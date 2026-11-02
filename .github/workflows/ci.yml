@@ -140,10 +140,14 @@ jobs:
       - name: Browser tests
         if: hashFiles('web-result.txt') == ''
         working-directory: webApp/e2e
+        env:
+          # Firefox runs headed on a virtual display: headless Firefox has no WebGL here (ADR-004).
+          FIREFOX_HEADED: "1"
         run: |
           npm ci
           npx playwright install --with-deps chromium firefox webkit > ../../playwright-install.txt 2>&1
-          npx playwright test 2>&1 | tee -a ../../web-log.txt || true
+          sudo apt-get install -y -q xvfb libgl1-mesa-dri libegl1 >> ../../playwright-install.txt 2>&1
+          xvfb-run -a --server-args="-screen 0 1280x800x24" npx playwright test 2>&1 | tee -a ../../web-log.txt || true
           node summarize.mjs | tee -a ../../web-log.txt
 
       - name: Upload web outputs

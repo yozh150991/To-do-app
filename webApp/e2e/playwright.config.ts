@@ -31,7 +31,10 @@ export default defineConfig({
       name: 'firefox',
       use: {
         ...devices['Desktop Firefox'],
-        // Headless Firefox on a GPU-less CI runner refuses software WebGL; Compose needs WebGL 2.
+        // Compose needs WebGL 2. Headless Firefox has no GL driver on a GPU-less runner
+        // ("Exhausted GL driver options"), so CI runs it headed under Xvfb with Mesa software GL
+        // (FIREFOX_HEADED=1) and lifts the blocklist for software rendering.
+        headless: process.env.FIREFOX_HEADED !== '1',
         launchOptions: { firefoxUserPrefs: { 'webgl.force-enabled': true } },
       },
     },
