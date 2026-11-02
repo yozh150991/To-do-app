@@ -16,12 +16,14 @@
 | `core/database` | Room 3 (schema v2), DAO, `LocalStore`, безпечне відкриття й оновлення схеми (`DatabaseOpener`) |
 | `core/domain` | `TaskRepository`: усі локальні мутації (сутність + activity + outbox в одній транзакції) |
 | `core/testing` | Спільні сценарії шару даних: запускаються і на JVM, і на Android-емуляторах; схема v1 і seed як SQL (їх використовує й Web self-test) |
+| `core/sync` | Майбутній SyncEngine (Ф5a). Зараз — `SupabaseProbe`: перевірка модулів supabase-kt на Android, JVM і Web |
 | `ui` | Спільний Compose-інтерфейс (екран Inbox для Ф0), Koin-модуль ViewModel |
 | `androidApp` | Android entry point (AGP 9, built-in Kotlin) |
 | `desktopApp` | JVM Desktop proof of concept |
 | `webApp` | Web proof of concept (Kotlin/Wasm): той самий Compose-інтерфейс і Room через SQLite WASM на OPFS (ADR-004); `worker/` — worker бази, `e2e/` — тести в браузерах (Playwright) |
 | `tools/ci` | Звіт CI для PR, запуск Android-емулятора, тест оновлення поверх, наскрізний тест скриптів релізу |
 | `tools/release` | Скрипти власника: ключ підпису (`create-keystore.sh`) і збірка релізу на комп'ютері (`build-release.sh`) |
+| `supabase/` | Локальний стек Supabase для CI (`config.toml`, міграції). Таблиця-проба Ф0, не продуктова схема (Ф5a) |
 | `tools/deps` | Перевірка актуальних версій залежностей |
 
 ## Вимоги

@@ -292,7 +292,6 @@ jobs:
             supabase-android-result.txt
             supabase-android-emulator.txt
             androidApp/build/reports/runtime-evidence/supabase-android.txt
-            androidApp/build/outputs/androidTest-results/**
 
       - name: Fail if the Android Supabase check failed
         run: test "$(cat supabase-android-result.txt 2>/dev/null || echo 1)" = "0"

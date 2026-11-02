@@ -23,6 +23,7 @@
 | Room 3 | 3.0.3 |
 | androidx.sqlite (bundled) | 2.7.1 → SQLite 3.50.1 |
 | Koin | 4.2.2 |
+| supabase-kt (Auth, PostgREST, Realtime) / Ktor | 3.8.0 / 3.5.1 (OkHttp на Android і JVM, fetch + WebSocket у браузері); локальний стек — Supabase CLI 2.122.0 |
 | kotlinx-coroutines / datetime / serialization | 1.11.0 / 0.8.0 / 1.12.0 |
 | JDK у CI | Temurin 21 (bytecode target 17) |
 | Android | compileSdk 37, targetSdk 37, minSdk 26 |
@@ -44,11 +45,15 @@
 | FTS5 uk/pl/en, `unicode61 remove_diacritics 2` | `pass` — 8/8 на API 26 і 37 | `pass` — 8/8 | `pass` — 6/6 у Chromium, Firefox, WebKit |
 | Міграція v1 → v2 зі snapshot (FIX-01): дані, нова FK, WAL-фрейми, відкат, збій на кожному кроці, нестача місця, відмова від downgrade | `pass` — API 26 і 37 | `pass` | Міграція v1 → v2 (Room AutoMigration на справжньому файлі v1, ті самі фікстури): `pass` у Chromium і Firefox — рядки, `integrity_check`, нова FK `section_id`, workspace, `local_seq`. Snapshot-захист FIX-01 на Web — `not_tested`, до релізу Web у Ф7 (ADR-004 п. 7) |
 | Спільні parser/timezone/recurrence fixtures | `not_tested` | `not_tested` | `not_tested` |
-| supabase-kt (Auth, PostgREST/RPC, Realtime) | `not_tested` | `not_tested` | `not_tested` |
+| supabase-kt (Auth, PostgREST/RPC, Realtime) | `pass` — емулятор API 37 проти локального Supabase (порт через `adb reverse`): усі 8 перевірок | `pass` — JDK 21: усі 8 перевірок | `pass` — Chromium, Firefox, WebKit: усі 8 перевірок; Web-бандл +0.8 MiB; обхід KT-87116 у webpack (див. нижче) |
 | Браузерне сховище та ізоляція (§3.3.1) | — | — | `pass` — без COOP/COEP (`crossOriginIsolated = false`, звичайний статичний сервер); друга вкладка — зрозуміла помилка без втрати даних; очищення сховища → чистий старт; квота best-effort (`persisted = false`). WebKit у тимчасовому контексті (≈ приватне вікно) OPFS не дає; приватні режими й eviction — повна матриця Ф7 |
 | UI у браузері | — | — | `pass` — Chromium і Firefox: Compose стартує, задача з поля вводу збережена в `todo.db`. Потрібен WebGL 2: без нього застосунок показує текстове повідомлення (у CI Firefox працює під Xvfb із програмним GL, бо headless Firefox без GPU WebGL не має) |
 | Release-підпис і ABI | `pass` (механізм) — release APK з одноразовим ключем у CI: підпис APK Signature Scheme v2, сертифікат збігається, лише `arm64-v8a`, 10.7 MiB. Реальний ключ — `not_tested` (крок власника, `docs/RELEASE.md`) | Runnable JAR; запуск вікна в CI не перевіряється (headless) | Статична збірка — артефакт CI (`webApp/build/dist/wasmJs/productionExecutable`); хостинг — Ф7, власні заголовки не потрібні (ADR-004) |
 | Оновлення поверх попередньої версії (`install -r`) | `pass` — емулятор API 37: база PR → поточна гілка, workspace, Inbox і всі рядки збережені (PR #3: v2 → v2; міграція v1 → v2 перевірена сценаріями) | — | — |
+
+**supabase-kt, що саме перевірено** (`core/sync/SupabaseProbe`, однаковий код на всіх платформах, локальний стек `supabase start` з `supabase/`): реєстрація email/паролем і повторний вхід (Auth); вставка з `owner_id = auth.uid()`, вибірка з фільтром, RLS показує лише свої рядки, RPC `f0_echo` (PostgREST); подія `postgres_changes` INSERT через WebSocket (Realtime); анонімний користувач рядків не бачить. Realtime іноді пропускає першу вставку одразу після `subscribed` — проба повторює вставку до трьох разів (на JVM і Android подія прийшла з другої). Це врахувати в SyncEngine Ф5b: Realtime — лише підказка, джерело правди — Pull.
+
+**KT-87116 (Kotlin/Wasm 2.4.20+).** З supabase-kt у Web-бандл потрапляє kotlinx-io, у Node-гілці якого лишається голий `import.meta`; `webApp.js` як класичний скрипт тоді не парситься в жодному браузері. Обхід — `webApp/webpack.config.d/strip-bare-import-meta.js` (замінює лише голий вираз у Node-only коді). Прибрати після виправлення в Kotlin; `tools/ci/web-bundle-check.sh` у кожному прогоні показує, чи лишився `import.meta` у бандлі.
 
 **Примітка про емулятор API 37.** Пакети системних образів Android 17 мають мінорний рівень у назві (`system-images;android-37.0;…`). Повний образ `google_apis` не дійшов до `boot_completed` на GitHub-hosted runner, тому для API 37 використовується ATD-образ (`google_atd`), призначений для автоматизованих тестів. Для тестів шару даних різниці немає; UI-тести на повному образі — окрема перевірка пізніше.
 
@@ -71,7 +76,7 @@
 
 1. **Власник:** ключ створено 02.11.2026, відбиток закріплено в `.github/release-signing-cert.sha256`. Збірка — на комп'ютері власника скриптом `build-release.sh`, GitHub — запасна; без застосунку-оновлювача (ADR-003). Лишилось: дві резервні копії, Android Studio на комп'ютері, зібрати `v0.0.1` і `v0.0.2` (друга — з ключем із резервної копії) й оновити поверх на телефоні (`docs/RELEASE.md`, чекліст gate).
 2. ~~Web spike~~ — `pass`, ADR-004 прийнято. Лишається Desktop runtime UI-перевірка.
-3. supabase-kt module matrix.
+3. ~~supabase-kt module matrix~~ — `pass` на всіх трьох платформах (`core/sync/SupabaseProbe`, jobs «Supabase modules»).
 4. `docs/UX_SPEC.md`, рядки в Compose resources (uk/en/pl), розбиття специфікації на `docs/*` за §13.4.
 5. Golden fixtures часу TIME-01..TIME-08 як виконувані тести (time-only subset).
 6. Перевірка на реальному телефоні (sqlite evidence + встановлення APK).
