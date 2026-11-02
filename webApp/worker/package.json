@@ -1,0 +1,10 @@
+{
+  "name": "todo-sqlite-worker",
+  "version": "0.1.0",
+  "description": "Web Worker for androidx WebWorkerSQLiteDriver: SQLite WASM with the OPFS SAHPool VFS (ADR-004)",
+  "license": "Apache-2.0",
+  "private": true,
+  "dependencies": {
+    "@sqlite.org/sqlite-wasm": "3.54.1-build1"
+  }
+}

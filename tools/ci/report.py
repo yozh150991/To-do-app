@@ -149,29 +149,40 @@ def main():
         out.append("#### Runtime evidence")
         for path in evidence:
             text = re.sub(r"compile_options: .*", "compile_options: (see artifact)", read(path).strip())
+            if len(text) > 6000:
+                text = text[:6000] + "\n…(truncated; full file in the workflow artifacts)"
             out += [f"`{path}`", "```", text, "```"]
         out.append("")
 
     apks = sorted(glob.glob("androidApp/build/outputs/apk/**/*.apk", recursive=True) + glob.glob("dist/*.apk"))
     jars = sorted(glob.glob("desktopApp/build/libs/*.jar"))
-    if apks or jars:
+    web = sorted(p for p in glob.glob("webApp/build/dist/wasmJs/productionExecutable/*") if os.path.isfile(p))
+    if apks or jars or web:
         out.append("#### Artifacts")
         for path in apks + jars:
             out.append(f"- `{path}` — {os.path.getsize(path) / 1024 / 1024:.2f} MiB")
+        if web:
+            total = sum(os.path.getsize(p) for p in web)
+            out.append(f"- Web build `webApp/build/dist/wasmJs/productionExecutable/` — {total / 1024 / 1024:.2f} MiB in {len(web)} files:")
+            for path in web:
+                out.append(f"  - `{os.path.basename(path)}` — {os.path.getsize(path) / 1024:.0f} KiB")
         out.append("")
 
     status = subprocess.run(
-        ["git", "status", "--porcelain", "--", "core/database/schemas"],
+        ["git", "status", "--porcelain", "--untracked-files=all", "--", "core/database/schemas", "kotlin-js-store"],
         capture_output=True, text=True, check=False,
     ).stdout.strip()
     if status:
-        out.append("#### Room schema not committed")
-        out.append("Generated schema differs from the repository; commit it:")
+        out.append("#### Generated files not committed")
+        out.append("Room schemas or the Kotlin/JS yarn.lock differ from the repository; commit them:")
         for line in status.splitlines():
             path = line[3:].strip()
-            files = [path] if os.path.isfile(path) else sorted(glob.glob(os.path.join(path, "**/*.json"), recursive=True))
+            files = [path] if os.path.isfile(path) else sorted(
+                glob.glob(os.path.join(path, "**/*.json"), recursive=True) + glob.glob(os.path.join(path, "**/*.lock"), recursive=True)
+            )
             for f in files:
-                out += [f"<details><summary><code>{f}</code></summary>", "", "```json", read(f), "```", "</details>"]
+                fence = "json" if f.endswith(".json") else "text"
+                out += [f"<details><summary><code>{f}</code></summary>", "", f"```{fence}", read(f), "```", "</details>"]
         out.append("")
 
     text = "\n".join(out)

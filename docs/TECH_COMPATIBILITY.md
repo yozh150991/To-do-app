@@ -26,23 +26,28 @@
 | kotlinx-coroutines / datetime / serialization | 1.11.0 / 0.8.0 / 1.12.0 |
 | JDK у CI | Temurin 21 (bytecode target 17) |
 | Android | compileSdk 37, targetSdk 37, minSdk 26 |
+| Web: Kotlin/Wasm (`wasmJs`, browser) | Kotlin 2.4.21; `androidx.sqlite:sqlite-web` 2.7.1 (`WebWorkerSQLiteDriver`) |
+| SQLite WASM у worker | `@sqlite.org/sqlite-wasm` 3.54.1-build1 → SQLite 3.54.1, VFS `opfs-sahpool` (`kotlin-js-store/wasm/yarn.lock`) |
+| Браузерні тести | Playwright 1.64.1: Chromium 156, Firefox 157, WebKit 27.2; Node.js 22 |
 
 **Поправка під час Ф0:** compileSdk піднято з 36 до 37, бо androidx Compose 1.12.1 (транзитивно через Compose Multiplatform 1.12.2) вимагає компіляції проти API 37 (`checkDebugAarMetadata`). `minSdk` 26 не змінився.
 
 ## Матриця
 
-Дата перевірки: 01.11.2026. Коміти: `dbca137361` (PR #2), `9cf79f7372` (PR #3: release-підпис і оновлення поверх). Емулятори: Android 8.0 (API 26, `default` x86_64) і Android 17 (API 37, `google_atd` x86_64), запуск скриптом `tools/ci/run-emulator.sh`.
+Дата перевірки: 01.11.2026 (Android, Desktop), 02.11.2026 (Web). Коміти: `dbca137361` (PR #2), `9cf79f7372` (PR #3: release-підпис і оновлення поверх), `5f9fe2edf4` (PR #7: Web, Playwright 1.64.1). Емулятори: Android 8.0 (API 26, `default` x86_64) і Android 17 (API 37, `google_atd` x86_64), запуск скриптом `tools/ci/run-emulator.sh`.
 
 | Критерій | Android | Desktop / JVM | Web / Wasm |
 | --- | --- | --- | --- |
-| Компіляція на одному version catalog | `pass` — debug APK (17.80 MiB, усі ABI) | `pass` — `desktopApp-jvm.jar` | `not_tested` — таргет ще не додано |
-| Room 3 + `BundledSQLiteDriver`: CRUD, транзакція, outbox, persist після reopen | `pass` — API 26 і API 37, 11/11 сценаріїв | `pass` — ті самі 11 сценаріїв + 17 тестів `core:database`/`core:domain` | `not_tested` |
-| SQLite: версія, `ENABLE_FTS5`, `VACUUM INTO` (ADR-001) | `pass` — SQLite 3.50.1 на API 26 і 37, FTS5 є, `VACUUM INTO` працює | `pass` — SQLite 3.50.1 | `not_tested` (WASM-збірка worker) |
-| FTS5 uk/pl/en, `unicode61 remove_diacritics 2` | `pass` — 8/8 на API 26 і 37 | `pass` — 8/8 | `not_tested` |
-| Міграція v1 → v2 зі snapshot (FIX-01): дані, нова FK, WAL-фрейми, відкат, збій на кожному кроці, нестача місця, відмова від downgrade | `pass` — API 26 і 37 | `pass` | `not_tested` |
+| Компіляція на одному version catalog | `pass` — debug APK (17.80 MiB, усі ABI) | `pass` — `desktopApp-jvm.jar` | `pass` — `wasmJsBrowserDistribution`, статична збірка 17.2 MiB разом із source maps (без стиснення: Skiko 8.4 MiB, застосунок 3.9 MiB, SQLite WASM 0.9 MiB) |
+| Room 3 + драйвер: CRUD, транзакція, outbox, persist після reopen | `pass` — API 26 і API 37, 11/11 сценаріїв | `pass` — ті самі 11 сценаріїв + 17 тестів `core:database`/`core:domain` | `pass` — `WebWorkerSQLiteDriver` + SQLite WASM на OPFS: Chromium і Firefox (перезавантаження, нова вкладка, перезапуск браузера, відкат outbox, безперервний `local_seq`); WebKit — у постійному профілі (ADR-004) |
+| SQLite: версія, `ENABLE_FTS5`, `VACUUM INTO` (ADR-001) | `pass` — SQLite 3.50.1 на API 26 і 37, FTS5 є, `VACUUM INTO` працює | `pass` — SQLite 3.50.1 | `pass` — SQLite 3.54.1, FTS5 є, `VACUUM INTO` у другий файл пулу OPFS + `integrity_check` (Chromium, Firefox, WebKit) |
+| FTS5 uk/pl/en, `unicode61 remove_diacritics 2` | `pass` — 8/8 на API 26 і 37 | `pass` — 8/8 | `pass` — 6/6 у Chromium, Firefox, WebKit |
+| Міграція v1 → v2 зі snapshot (FIX-01): дані, нова FK, WAL-фрейми, відкат, збій на кожному кроці, нестача місця, відмова від downgrade | `pass` — API 26 і 37 | `pass` | Міграція v1 → v2 (Room AutoMigration на справжньому файлі v1, ті самі фікстури): `pass` у Chromium і Firefox — рядки, `integrity_check`, нова FK `section_id`, workspace, `local_seq`. Snapshot-захист FIX-01 на Web — `not_tested`, до релізу Web у Ф7 (ADR-004 п. 7) |
 | Спільні parser/timezone/recurrence fixtures | `not_tested` | `not_tested` | `not_tested` |
 | supabase-kt (Auth, PostgREST/RPC, Realtime) | `not_tested` | `not_tested` | `not_tested` |
-| Release-підпис і ABI | `pass` (механізм) — release APK з одноразовим ключем у CI: підпис APK Signature Scheme v2, сертифікат збігається, лише `arm64-v8a`, 10.7 MiB. Реальний ключ — `not_tested` (крок власника, `docs/RELEASE.md`) | Runnable JAR; запуск вікна в CI не перевіряється (headless) | `not_tested` |
+| Браузерне сховище та ізоляція (§3.3.1) | — | — | `pass` — без COOP/COEP (`crossOriginIsolated = false`, звичайний статичний сервер); друга вкладка — зрозуміла помилка без втрати даних; очищення сховища → чистий старт; квота best-effort (`persisted = false`). WebKit у тимчасовому контексті (≈ приватне вікно) OPFS не дає; приватні режими й eviction — повна матриця Ф7 |
+| UI у браузері | — | — | `pass` — Chromium і Firefox: Compose стартує, задача з поля вводу збережена в `todo.db`. Потрібен WebGL 2: без нього застосунок показує текстове повідомлення (у CI Firefox працює під Xvfb із програмним GL, бо headless Firefox без GPU WebGL не має) |
+| Release-підпис і ABI | `pass` (механізм) — release APK з одноразовим ключем у CI: підпис APK Signature Scheme v2, сертифікат збігається, лише `arm64-v8a`, 10.7 MiB. Реальний ключ — `not_tested` (крок власника, `docs/RELEASE.md`) | Runnable JAR; запуск вікна в CI не перевіряється (headless) | Статична збірка — артефакт CI (`webApp/build/dist/wasmJs/productionExecutable`); хостинг — Ф7, власні заголовки не потрібні (ADR-004) |
 | Оновлення поверх попередньої версії (`install -r`) | `pass` — емулятор API 37: база PR → поточна гілка, workspace, Inbox і всі рядки збережені (PR #3: v2 → v2; міграція v1 → v2 перевірена сценаріями) | — | — |
 
 **Примітка про емулятор API 37.** Пакети системних образів Android 17 мають мінорний рівень у назві (`system-images;android-37.0;…`). Повний образ `google_apis` не дійшов до `boot_completed` на GitHub-hosted runner, тому для API 37 використовується ATD-образ (`google_atd`), призначений для автоматизованих тестів. Для тестів шару даних різниці немає; UI-тести на повному образі — окрема перевірка пізніше.
@@ -51,7 +56,7 @@
 
 - **Android:** шар даних пройшов runtime-перевірку на мінімальному (API 26) і актуальному (API 37) Android: CRUD і збереження після перезапуску, атомарність entity + activity + outbox, безперервний `local_seq` при 50 паралельних записах, безпечне оновлення схеми з відкатом. Не перевірено на реальному телефоні.
 - **Desktop/JVM:** ті самі сценарії `pass`. UI-вікно не перевіряється автоматично.
-- **Web:** ще не почато; окремий spike за §3.3.1 (worker + OPFS або IndexedDB fallback).
+- **Web:** Room/OPFS spike пройшов у обов'язкових браузерах (Chromium, Firefox): та сама схема, DAO і `TaskRepository` через `WebWorkerSQLiteDriver` і власний worker на SQLite WASM з VFS `opfs-sahpool`. COOP/COEP не потрібні, отже підходить будь-який статичний хостинг. Обмеження: одна вкладка; WebKit/Safari лише поза приватним режимом; сховище best-effort до синхронізації Ф5; Compose потребує WebGL 2. Fallback на IndexedDB не знадобився. Рішення — ADR-004 (Accepted).
 
 ## Стан gate ADR-001
 
@@ -65,7 +70,7 @@
 ## Що залишилось для gate Ф0
 
 1. **Власник:** ключ створено 02.11.2026, відбиток закріплено в `.github/release-signing-cert.sha256`. Збірка — на комп'ютері власника скриптом `build-release.sh`, GitHub — запасна; без застосунку-оновлювача (ADR-003). Лишилось: дві резервні копії, Android Studio на комп'ютері, зібрати `v0.0.1` і `v0.0.2` (друга — з ключем із резервної копії) й оновити поверх на телефоні (`docs/RELEASE.md`, чекліст gate).
-2. Web spike і рішення pass/blocked з ADR; Desktop runtime UI-перевірка.
+2. ~~Web spike~~ — `pass`, ADR-004 прийнято. Лишається Desktop runtime UI-перевірка.
 3. supabase-kt module matrix.
 4. `docs/UX_SPEC.md`, рядки в Compose resources (uk/en/pl), розбиття специфікації на `docs/*` за §13.4.
 5. Golden fixtures часу TIME-01..TIME-08 як виконувані тести (time-only subset).

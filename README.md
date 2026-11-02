@@ -15,10 +15,11 @@
 | `core/model` | Доменні типи, правила валідації, імена операцій, fractional order keys |
 | `core/database` | Room 3 (schema v2), DAO, `LocalStore`, безпечне відкриття й оновлення схеми (`DatabaseOpener`) |
 | `core/domain` | `TaskRepository`: усі локальні мутації (сутність + activity + outbox в одній транзакції) |
-| `core/testing` | Спільні сценарії шару даних: запускаються і на JVM, і на Android-емуляторах |
+| `core/testing` | Спільні сценарії шару даних: запускаються і на JVM, і на Android-емуляторах; схема v1 і seed як SQL (їх використовує й Web self-test) |
 | `ui` | Спільний Compose-інтерфейс (екран Inbox для Ф0), Koin-модуль ViewModel |
 | `androidApp` | Android entry point (AGP 9, built-in Kotlin) |
 | `desktopApp` | JVM Desktop proof of concept |
+| `webApp` | Web proof of concept (Kotlin/Wasm): той самий Compose-інтерфейс і Room через SQLite WASM на OPFS (ADR-004); `worker/` — worker бази, `e2e/` — тести в браузерах (Playwright) |
 | `tools/ci` | Звіт CI для PR, запуск Android-емулятора, тест оновлення поверх, наскрізний тест скриптів релізу |
 | `tools/release` | Скрипти власника: ключ підпису (`create-keystore.sh`) і збірка релізу на комп'ютері (`build-release.sh`) |
 | `tools/deps` | Перевірка актуальних версій залежностей |
@@ -43,6 +44,13 @@
 
 # Desktop proof of concept
 ./gradlew :desktopApp:run
+
+# Web: статична production-збірка у webApp/build/dist/wasmJs/productionExecutable
+./gradlew :webApp:wasmJsBrowserDistribution
+# Web у браузері з перезбиранням при змінах
+./gradlew :webApp:wasmJsBrowserDevelopmentRun
+# Тести в Chromium, Firefox і WebKit (Node.js 22; звичайний статичний сервер без COOP/COEP)
+cd webApp/e2e && npm ci && npx playwright install chromium firefox webkit && npx playwright test
 ```
 
 Desktop зберігає базу в `~/.todo-app/todo.db`; інше місце — `-Dtodo.dataDir=/шлях`.
@@ -50,7 +58,7 @@ Desktop зберігає базу в `~/.todo-app/todo.db`; інше місце 
 ## Як вносяться зміни
 
 - `main` змінюється лише через pull request.
-- CI (`.github/workflows/ci.yml`) на кожен PR збирає APK і JAR, запускає JVM-тести, instrumented-тести на емуляторах Android 8.0 (API 26) і Android 17 (API 37), тест оновлення поверх і скрипти релізу на Linux і Windows, та публікує зведений звіт коментарем у PR, включно з доказами runtime.
+- CI (`.github/workflows/ci.yml`) на кожен PR збирає APK, JAR і Web-збірку, запускає JVM-тести, instrumented-тести на емуляторах Android 8.0 (API 26) і Android 17 (API 37), тести Web у Chromium, Firefox і WebKit, тест оновлення поверх і скрипти релізу на Linux і Windows, та публікує зведений звіт коментарем у PR, включно з доказами runtime.
 - Нова схема БД = нова версія Room + міграція + тест; деструктивна міграція заборонена (spec §3.2, §12.4). Відкриття бази в застосунку — тільки через `openAppDatabase` (snapshot перед оновленням і відкат при збої, `docs/DATA_MODEL.md`).
 - Рішення, що відхиляються від специфікації, оформлюються ADR (`docs/ADR/`).
 
@@ -58,5 +66,5 @@ Desktop зберігає базу в `~/.todo-app/todo.db`; інше місце 
 
 - Ключ підпису створено, відбиток закріплено; перший реліз збирається `tools/release/build-release.sh` (потрібна Android Studio на комп'ютері, `docs/RELEASE.md`).
 - Немає хмарної синхронізації, імпорту з Todoist і нагадувань: це фази Ф1a+.
-- Web-таргет ще не доданий (окремий spike у Ф0).
+- Web — proof of concept, не реліз (реліз Web — Ф7): працює в Chromium і Firefox, у WebKit/Safari — поза приватним режимом; одночасно відкрита лише одна вкладка; до синхронізації (Ф5) дані живуть тільки в цьому браузері (ADR-004).
 - Рядки інтерфейсу поки українською в коді; перенесення в Compose resources (uk/en/pl) заплановане в Ф0.
