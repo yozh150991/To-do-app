@@ -20,6 +20,10 @@ ALIAS="todo-release"
 KEYSTORE="todo-release.jks"
 MIN_PASSWORD_LENGTH=12
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=tools/release/common.sh
+. "$SCRIPT_DIR/common.sh"
+
 # --- keep the window open -------------------------------------------------------------------------
 finish() {
   local status=$?
@@ -54,56 +58,17 @@ if [ -e "$KEYSTORE" ]; then
   fail "У $OUT_DIR уже є $KEYSTORE. Ключ створюється один раз; існуючий не перезаписую."
 fi
 
-display_path() { # Windows path in Git Bash, normal path elsewhere
-  if command -v cygpath >/dev/null 2>&1; then cygpath -w "$1"; else echo "$1"; fi
-}
-
-# --- find a working keytool -----------------------------------------------------------------------
-works() { [ -n "$1" ] && [ -x "$1" ] && "$1" -J-Duser.language=en -help >/dev/null 2>&1; }
-
-unix_path() { # converts a Windows path from an environment variable for Git Bash
-  if [ -n "$1" ] && command -v cygpath >/dev/null 2>&1; then cygpath -u "$1"; else echo "$1"; fi
-}
-
-find_keytool() {
-  local candidates=() c
-  [ -n "${JAVA_HOME:-}" ] && candidates+=("$(unix_path "$JAVA_HOME")/bin/keytool" "$(unix_path "$JAVA_HOME")/bin/keytool.exe")
-  c="$(command -v keytool 2>/dev/null || true)"; [ -n "$c" ] && candidates+=("$c")
-  candidates+=(
-    # Android Studio bundled runtime
-    "/c/Program Files/Android/Android Studio/jbr/bin/keytool.exe"
-    "$(unix_path "${LOCALAPPDATA:-}")/Programs/Android Studio/jbr/bin/keytool.exe"
-    "/Applications/Android Studio.app/Contents/jbr/Contents/Home/bin/keytool"
-    "$HOME/Applications/Android Studio.app/Contents/jbr/Contents/Home/bin/keytool"
-    "/opt/android-studio/jbr/bin/keytool"
-    "$HOME/android-studio/jbr/bin/keytool"
-  )
-  # JDK installs (Temurin, Oracle, Microsoft, Zulu) and JetBrains Toolbox
-  for c in "/c/Program Files/Eclipse Adoptium/"*/bin/keytool.exe \
-           "/c/Program Files/Java/"*/bin/keytool.exe \
-           "/c/Program Files/Microsoft/"jdk*/bin/keytool.exe \
-           "/c/Program Files/Zulu/"*/bin/keytool.exe \
-           "$(unix_path "${LOCALAPPDATA:-}")/JetBrains/Toolbox/apps/"*/*/jbr/bin/keytool.exe \
-           /Library/Java/JavaVirtualMachines/*/Contents/Home/bin/keytool \
-           "$HOME/Library/Application Support/JetBrains/Toolbox/apps/"*/*/jbr/Contents/Home/bin/keytool; do
-    candidates+=("$c")
-  done
-  for c in "${candidates[@]}"; do
-    if works "$c"; then echo "$c"; return 0; fi
-  done
-  return 1
-}
-
 echo "== Створення ключа підпису To-do app"
 echo "Папка для ключа: $(display_path "$OUT_DIR")"
 echo
 
-KEYTOOL="$(find_keytool)" || fail "Не знайдено робочий keytool.
+JDK_HOME="$(find_java_home 11)" || fail "Не знайдено робочий keytool.
 Він є в Android Studio або в будь-якому JDK. Варіанти:
   - встанови Android Studio (developer.android.com/studio) і запусти скрипт знову;
   - або встанови JDK 21 (adoptium.net, Temurin) і запусти скрипт знову;
   - або вкажи JDK вручну: JAVA_HOME=/шлях/до/jdk bash create-keystore.sh"
-echo "keytool: $KEYTOOL"
+KEYTOOL="$(exe "$JDK_HOME/bin" keytool)"
+echo "keytool: $(display_path "$KEYTOOL")"
 echo
 
 # --- password ---------------------------------------------------------------------------------
@@ -135,8 +100,7 @@ echo "Створюю ключ (RSA 4096, alias $ALIAS)..."
   -storepass:env TODO_KEYSTORE_PASSWORD -keypass:env TODO_KEYSTORE_PASSWORD \
   || fail "keytool не зміг створити ключ"
 
-FINGERPRINT="$("$KEYTOOL" -J-Duser.language=en -list -v -keystore "$KEYSTORE" -alias "$ALIAS" \
-  -storepass:env TODO_KEYSTORE_PASSWORD | awk '/SHA256:/ {print $2}' | tr -d ':' | tr 'A-F' 'a-f')"
+FINGERPRINT="$(keystore_cert_sha256 "$KEYTOOL" "$KEYSTORE" TODO_KEYSTORE_PASSWORD "$ALIAS")"
 unset TODO_KEYSTORE_PASSWORD
 [ "${#FINGERPRINT}" -eq 64 ] || fail "Ключ створено, але не вдалося прочитати його відбиток. Перевір: keytool -list -v -keystore $KEYSTORE"
 
