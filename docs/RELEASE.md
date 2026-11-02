@@ -30,13 +30,17 @@ Release workflow відмовляється публікувати APK, якщо
 
 ### 1. Створити ключ
 
-На своєму комп'ютері, у порожній папці **поза** репозиторієм (потрібен `keytool` з будь-якого JDK або Android Studio):
+Потрібен `keytool`: він є в Android Studio і в будь-якому JDK, скрипт шукає його сам (`JAVA_HOME`, `PATH`, типові папки Android Studio, Temurin, Oracle, Microsoft JDK).
 
-```bash
-bash /шлях/до/To-do-app/tools/release/create-keystore.sh
-```
+- **Windows** (потрібен Git for Windows): подвійний клік на `tools/release/create-keystore.sh` або в Git Bash `bash tools/release/create-keystore.sh`.
+- **macOS / Linux:** у терміналі `bash tools/release/create-keystore.sh`.
 
-Скрипт попросить пароль, створить `todo-release.jks` і `todo-release.jks.base64.txt` та надрукує SHA-256 сертифіката.
+Скрипт:
+- створює ключ у папці **поза** репозиторієм: за замовчуванням `~/todo-release-key` (на Windows — `C:\Users\<ім'я>\todo-release-key`), інша папка — першим аргументом;
+- двічі просить пароль (символи не показуються, мінімум 12) і сам передає його `keytool`;
+- створює `todo-release.jks`, `todo-release.jks.base64.txt` і `certificate-sha256.txt` та друкує відбиток SHA-256;
+- відмовляється перезаписати вже створений ключ;
+- не закриває вікно, доки не натиснеш Enter, тож будь-яку помилку видно.
 
 ### 2. Дві незалежні резервні копії
 
