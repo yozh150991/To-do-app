@@ -75,9 +75,9 @@
 
 ## Що залишилось для gate Ф0
 
-1. **Власник:** ключ створено 02.11.2026, відбиток закріплено в `.github/release-signing-cert.sha256`. Збірка — на комп'ютері власника скриптом `build-release.sh`, GitHub — запасна; без застосунку-оновлювача (ADR-003). Лишилось: дві резервні копії, Android Studio на комп'ютері, зібрати `v0.0.1` і `v0.0.2` (друга — з ключем із резервної копії) й оновити поверх на телефоні (`docs/RELEASE.md`, чекліст gate).
+1. **Власник:** ключ створено 02.11.2026, відбиток закріплено в `.github/release-signing-cert.sha256`. Збірка — на комп'ютері власника скриптом `build-release.sh`, GitHub — запасна; без застосунку-оновлювача (ADR-003). `v0.0.1` опубліковано запасним шляхом (workflow `Release`, 02.11.2026). Лишилось: дві резервні копії, Android Studio на комп'ютері, встановити `v0.0.1` на телефон, зібрати `v0.0.2` на комп'ютері з ключем із резервної копії й оновити поверх (`docs/RELEASE.md`, чекліст gate).
 2. ~~Web spike~~ — `pass`, ADR-004 прийнято. ~~Desktop runtime UI-перевірка~~ — `pass` (job «Desktop window (Xvfb)»).
 3. ~~supabase-kt module matrix~~ — `pass` на всіх трьох платформах (`core/sync/SupabaseProbe`, jobs «Supabase modules»).
 4. `docs/UX_SPEC.md`, ~~рядки в Compose resources (uk/en/pl)~~, розбиття специфікації на `docs/*` за §13.4.
 5. ~~Golden fixtures часу (time-only subset)~~ — TIME-01..04, TIME-08 виконуються на JVM, Android і в браузерах (`core/testing/TimeGoldenFixtures`); TIME-05..07 — разом із recurrence engine у Ф2.
-6. Перевірка на реальному телефоні (sqlite evidence + встановлення APK).
+6. Перевірка на реальному телефоні: `v0.0.2` поверх `v0.0.1` і скріншот діалогу «Про застосунок» (версія SQLite, FTS5, схема, журнал, `quick_check`) — закриває рядок «на реальному телефоні» в gate ADR-001. Ті самі значення через Room уже перевіряються в CI (`diagnosticsThroughRoom` на JVM і API 26/37, `?selftest=inspect` у браузерах).

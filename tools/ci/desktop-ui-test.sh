@@ -114,6 +114,12 @@ WORKSPACE=$(sql 'SELECT workspace_id FROM local_workspace')
 
 # --- second start on the same data -----------------------------------------------------------
 start_app restart
+# "About" sits at the right end of the top bar: the dialog reads SQLite facts through Room.
+xdotool mousemove --window "$WID" $((WIDTH - 45)) 32 click 1 >> "$LOG" 2>&1
+sleep 3
+import -window root "$SHOTS/about.png" 2>> "$LOG" || true
+kill -0 "$APP_PID" 2>/dev/null || fail "the app exited after opening About"
+evidence "about: dialog opened, screenshot about.png"
 stop_app
 [ "$(sql 'SELECT workspace_id FROM local_workspace')" = "$WORKSPACE" ] || fail "workspace changed after restart"
 [ "$(sql "SELECT COUNT(*) FROM task WHERE content = '$TASK_TEXT'")" = "1" ] || fail "task lost after restart"

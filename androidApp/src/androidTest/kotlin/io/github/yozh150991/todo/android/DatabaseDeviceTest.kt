@@ -38,6 +38,8 @@ class DatabaseDeviceTest {
 
     @Test fun sqliteRuntimeEvidence() = DatabaseScenarios.sqliteRuntimeEvidence(env("sqlite"))
 
+    @Test fun diagnosticsThroughRoom() = runBlocking { DatabaseScenarios.diagnosticsThroughRoom(env("diagnostics")) }
+
     @Test fun persistsAcrossReopen() = runBlocking { DatabaseScenarios.persistsAcrossReopen(env("reopen")) }
 
     @Test fun outboxFailureRollsBack() = runBlocking { DatabaseScenarios.outboxFailureRollsBack(env("rollback")) }

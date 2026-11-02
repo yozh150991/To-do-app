@@ -20,6 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -35,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.yozh150991.todo.core.model.Task
 import io.github.yozh150991.todo.ui.resources.Res
+import io.github.yozh150991.todo.ui.resources.about
 import io.github.yozh150991.todo.ui.resources.add_task
 import io.github.yozh150991.todo.ui.resources.complete_task
 import io.github.yozh150991.todo.ui.resources.database_unavailable
@@ -48,7 +50,7 @@ import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun InboxScreen(viewModel: InboxViewModel, modifier: Modifier = Modifier) {
+fun InboxScreen(viewModel: InboxViewModel, onOpenAbout: () -> Unit, modifier: Modifier = Modifier) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
     var draft by rememberSaveable { mutableStateOf("") }
@@ -62,7 +64,13 @@ fun InboxScreen(viewModel: InboxViewModel, modifier: Modifier = Modifier) {
 
     Scaffold(
         modifier = modifier,
-        topBar = { TopAppBar(title = { Text(stringResource(Res.string.inbox_title)) }) },
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(Res.string.inbox_title)) },
+                // A text button for now: the icon set and the navigation drawer come with the Ф1a screens.
+                actions = { TextButton(onClick = onOpenAbout) { Text(stringResource(Res.string.about)) } },
+            )
+        },
     ) { padding ->
         Column(
             modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),

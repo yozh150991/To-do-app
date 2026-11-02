@@ -53,6 +53,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun externalIdentityDao(): ExternalIdentityDao
     abstract fun sectionDao(): SectionDao
     abstract fun labelDao(): LabelDao
+    abstract fun diagnosticsDao(): DiagnosticsDao
 
     companion object {
         const val SCHEMA_VERSION = 2

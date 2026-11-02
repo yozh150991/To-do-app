@@ -12,6 +12,7 @@ import io.github.yozh150991.todo.core.database.LocalStoreProvider
 import io.github.yozh150991.todo.core.database.createWebAppDatabase
 import io.github.yozh150991.todo.core.domain.TaskRepository
 import io.github.yozh150991.todo.ui.App
+import io.github.yozh150991.todo.ui.about.AppInfo
 import io.github.yozh150991.todo.ui.uiModule
 import kotlinx.browser.document
 import kotlinx.browser.window
@@ -90,6 +91,8 @@ fun main() {
             module {
                 single { stores }
                 single { TaskRepository(get<LocalStoreProvider>()) }
+                // The Web build is a Ф0 spike without a release version yet (Web release: Ф7).
+                single { AppInfo(version = "dev (web)", platform = window.navigator.userAgent) }
             },
             uiModule,
         )

@@ -9,4 +9,15 @@
     <string name="database_unavailable">Базу даних не вдалося відкрити, дані не змінено. %1$s</string>
     <string name="error_blank_content">Задачі потрібна назва</string>
     <string name="error_not_saved">Зміну не збережено: %1$s</string>
+    <string name="about">Про застосунок</string>
+    <string name="about_version">Версія: %1$s</string>
+    <string name="about_platform">Пристрій: %1$s</string>
+    <string name="about_sqlite">SQLite %1$s, FTS5: %2$s</string>
+    <string name="about_database">База: схема v%1$d, журнал %2$s, перевірка %3$s</string>
+    <string name="about_counts">Задач: %1$d, очікують синхронізації: %2$d</string>
+    <string name="about_loading">Збираю відомості…</string>
+    <string name="about_failed">Не вдалося прочитати базу: %1$s</string>
+    <string name="yes">так</string>
+    <string name="no">ні</string>
+    <string name="close">Закрити</string>
 </resources>

@@ -112,6 +112,9 @@ interface OutboxDao {
     @Query("SELECT COUNT(*) FROM outbox_operation WHERE status = 'pending'")
     fun observePendingCount(): Flow<Int>
 
+    @Query("SELECT COUNT(*) FROM outbox_operation WHERE status = 'pending'")
+    suspend fun pendingCount(): Int
+
     @Query("SELECT COUNT(*) FROM outbox_operation")
     suspend fun count(): Int
 }

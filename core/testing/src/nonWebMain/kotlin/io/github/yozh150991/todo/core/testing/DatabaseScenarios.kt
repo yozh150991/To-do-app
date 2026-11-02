@@ -11,6 +11,7 @@ import io.github.yozh150991.todo.core.database.SimulatedCrashException
 import io.github.yozh150991.todo.core.database.UnsupportedDowngradeException
 import io.github.yozh150991.todo.core.database.UpgradeFault
 import io.github.yozh150991.todo.core.database.entity.SectionEntity
+import io.github.yozh150991.todo.core.database.diagnostics
 import io.github.yozh150991.todo.core.database.inspect
 import io.github.yozh150991.todo.core.domain.TaskRepository
 import io.github.yozh150991.todo.core.model.IdGenerator
@@ -94,6 +95,23 @@ object DatabaseScenarios {
     }
 
     // --- Room CRUD, outbox, restart --------------------------------------------------------------
+
+    /** The "About" dialog's facts through Room itself (the path the app uses on every platform). */
+    suspend fun diagnosticsThroughRoom(env: DatabaseTestEnv) {
+        val database = env.build(env.path("diagnostics.db"))
+        val store = LocalStore(database)
+        TaskRepository(store).createTask("Діагностика")
+        val d = store.diagnostics()
+        assertTrue(d.sqliteVersion.startsWith("3."), d.sqliteVersion)
+        assertTrue(d.fts5, "FTS5 must be compiled in (ADR-001)")
+        assertEquals("wal", d.journalMode)
+        assertEquals(AppDatabase.SCHEMA_VERSION, d.schemaVersion)
+        assertEquals("ok", d.quickCheck)
+        assertEquals(1, d.tasks)
+        assertEquals(2, d.pendingOperations, "Inbox project.create + task.create")
+        env.log("[${env.platform}] diagnostics: $d")
+        database.close()
+    }
 
     suspend fun persistsAcrossReopen(env: DatabaseTestEnv) {
         val path = env.path("todo.db")

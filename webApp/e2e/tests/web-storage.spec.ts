@@ -268,6 +268,13 @@ test('app UI starts, renders and saves a typed task', async ({ page, browserName
     await page.waitForTimeout(2_000);
     await page.screenshot({ path: path.join(evidenceDir, `ui-${browserName}-typed.png`) });
 
+    // "About" sits at the right end of the top bar; its database facts are checked by ?selftest=inspect.
+    const viewport = page.viewportSize() ?? { width: 1280, height: 720 };
+    await page.mouse.click(viewport.width - 45, 32);
+    await page.waitForTimeout(2_000);
+    await page.screenshot({ path: path.join(evidenceDir, `ui-${browserName}-about.png`) });
+    lines.push(`errors after About: ${JSON.stringify(errors)}`);
+
     await leave(page);
     const inspect = await selfTest(page, 'selftest=inspect');
     lines.push(`todo.db after typing: ${inspect.status} ${JSON.stringify(inspect.json)}`);
