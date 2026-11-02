@@ -78,6 +78,6 @@
 1. **Власник:** ключ створено 02.11.2026, відбиток закріплено в `.github/release-signing-cert.sha256`. Збірка — на комп'ютері власника скриптом `build-release.sh`, GitHub — запасна; без застосунку-оновлювача (ADR-003). Лишилось: дві резервні копії, Android Studio на комп'ютері, зібрати `v0.0.1` і `v0.0.2` (друга — з ключем із резервної копії) й оновити поверх на телефоні (`docs/RELEASE.md`, чекліст gate).
 2. ~~Web spike~~ — `pass`, ADR-004 прийнято. ~~Desktop runtime UI-перевірка~~ — `pass` (job «Desktop window (Xvfb)»).
 3. ~~supabase-kt module matrix~~ — `pass` на всіх трьох платформах (`core/sync/SupabaseProbe`, jobs «Supabase modules»).
-4. `docs/UX_SPEC.md`, ~~рядки в Compose resources (uk/en/pl)~~, розбиття специфікації на `docs/*` за §13.4.
+4. ~~`docs/UX_SPEC.md`~~ (погоджено 02.11.2026), ~~рядки в Compose resources (uk/en/pl)~~, ~~розбиття специфікації на `docs/*` за §13.4~~ (03.11.2026, індекс — §0.3 специфікації).
 5. ~~Golden fixtures часу (time-only subset)~~ — TIME-01..04, TIME-08 виконуються на JVM, Android і в браузерах (`core/testing/TimeGoldenFixtures`); TIME-05..07 — разом із recurrence engine у Ф2.
 6. Перевірка на реальному телефоні (sqlite evidence + встановлення APK).

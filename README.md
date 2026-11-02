@@ -2,7 +2,8 @@
 
 Особистий офлайн-перший менеджер задач: Android спочатку, далі Web і Desktop на Kotlin Multiplatform.
 
-- Чинна специфікація: [`task-manager-scope-roadmap-v2.6.1.md`](task-manager-scope-roadmap-v2.6.1.md) і рішення в [`docs/ADR/`](docs/ADR/README.md).
+- Чинна специфікація: індекс [`task-manager-scope-roadmap-v2.6.1.md`](task-manager-scope-roadmap-v2.6.1.md) (мета, роадмап, gate-критерії, рішення; де лежить кожен розділ — §0.3) і рішення в [`docs/ADR/`](docs/ADR/README.md).
+- Архітектура й модулі: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Синхронізація: [`docs/SYNC_PROTOCOL.md`](docs/SYNC_PROTOCOL.md). Повтори й нагадування: [`docs/RECURRENCE_CONTRACT.md`](docs/RECURRENCE_CONTRACT.md). Перехід із Todoist: [`docs/MIGRATION_TODOIST.md`](docs/MIGRATION_TODOIST.md), [`docs/IMPORT_COVERAGE.md`](docs/IMPORT_COVERAGE.md). Тестування: [`docs/QA_PLAN.md`](docs/QA_PLAN.md). Аварійне відновлення сервера: [`docs/DISASTER_RECOVERY.md`](docs/DISASTER_RECOVERY.md).
 - Стан сумісності платформ і версій: [`docs/TECH_COMPATIBILITY.md`](docs/TECH_COMPATIBILITY.md).
 - Модель даних: [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md).
 - Інтерфейс і поведінка (навігація, екрани, стани, жести, доступність): [`docs/UX_SPEC.md`](docs/UX_SPEC.md).
