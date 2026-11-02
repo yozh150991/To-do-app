@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Runs only SupabaseDeviceTest on the booted emulator against the local Supabase stack, reached
-# from the emulator at 10.0.2.2. Reads the anon key from supabase.env (supabase-start.sh).
+# Runs only SupabaseDeviceTest on the booted emulator against the local Supabase stack on the host.
+# The emulator's 10.0.2.2 alias timed out against the Docker-published port on the CI runner, so the
+# port is forwarded with `adb reverse` and the app connects to 127.0.0.1 on the device.
+# Reads the anon key from supabase.env (supabase-start.sh).
 # Always exits 0; the verdict goes to supabase-android-result.txt.
 set -u
 LOG="supabase-android-log.txt"
@@ -8,7 +10,13 @@ EVIDENCE_DIR="androidApp/build/reports/runtime-evidence"
 mkdir -p "$EVIDENCE_DIR"
 # shellcheck disable=SC1091
 . ./supabase.env
-EMULATOR_URL="http://10.0.2.2:${SUPABASE_URL##*:}"
+PORT="${SUPABASE_URL##*:}"
+adb reverse "tcp:$PORT" "tcp:$PORT" >> "$LOG" 2>&1
+{
+  echo "== adb reverse"; adb reverse --list
+  echo "== Docker port bindings"; docker ps --format '{{.Names}} {{.Ports}}' | grep -i kong || true
+} >> "$LOG" 2>&1
+EMULATOR_URL="http://127.0.0.1:$PORT"
 
 adb logcat -c || true
 # The probe has its own per-check timeouts; this bound keeps a stuck instrumentation from eating the job.

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   Debug builds only. The Ф0 supabase-kt probe (androidTest SupabaseDeviceTest) talks to a local
-  Supabase stack over plain HTTP at 10.0.2.2 (the emulator's host). The release app gets network
+  Supabase stack over plain HTTP (127.0.0.1 forwarded by adb reverse, or 10.0.2.2). The release app gets network
   access with the sync engine in phase Ф5a.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
