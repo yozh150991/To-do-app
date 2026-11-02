@@ -42,9 +42,9 @@
 | `VACUUM INTO` + `integrity_check` + кількість задач у копії | pass | pass | pass |
 | Міграція v1 → v2 (Room AutoMigration на справжньому файлі v1) | pass | pass | — |
 | Очищення сховища → чистий старт з новим workspace | pass | pass | — |
-| UI: старт, задача з поля вводу збережена в базі | pass | перевіряється | помилка відкриття бази (див. нижче) |
+| UI: старт, задача з поля вводу збережена в базі | pass | pass | помилка відкриття бази (див. нижче) |
 
-**WebKit.** У тимчасовому контексті Playwright (аналог приватного вікна) WebKit не дає OPFS access handles: «The operation failed for an unknown transient reason». У постійному профілі все проходить. Тобто Safari у звичайному режимі має працювати, у приватному — ні; застосунок у такому разі показує помилку відкриття бази, а не падає. Перевірка на справжньому Safari — Ф7.
+**WebKit.** У тимчасовому контексті Playwright (аналог приватного вікна) WebKit не дає OPFS access handles: «The operation failed for an unknown transient reason». У постійному профілі все проходить. Тобто Safari у звичайному режимі має працювати, у приватному — ні; застосунок у такому разі показує помилку відкриття бази, а не падає. Перевірка на справжньому Safari — Ф7. Ці два тести для WebKit позначені в Playwright як відоме обмеження (`test.fail`): якщо WebKit почне їх проходити, CI це покаже.
 
 **Помилка «друга вкладка»:** Chromium — «Access Handles cannot be created if there is another open Access Handle…», Firefox — «No modification allowed».
 

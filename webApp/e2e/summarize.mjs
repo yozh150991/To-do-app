@@ -16,7 +16,10 @@ if (fs.existsSync(resultsFile)) {
     for (const spec of suite.specs ?? []) {
       for (const t of spec.tests ?? []) {
         const project = t.projectName;
-        const outcome = t.results?.at(-1)?.status ?? 'missing';
+        // test.fail() marks a known limitation: an expected failure counts as a pass of the check.
+        const outcome = t.status === 'expected'
+          ? (t.expectedStatus === 'failed' ? 'passed (known limitation, expected failure)' : 'passed')
+          : (t.results?.at(-1)?.status ?? 'missing');
         (byProject[project] ??= []).push(`${outcome.padEnd(8)} ${spec.title}`);
       }
     }

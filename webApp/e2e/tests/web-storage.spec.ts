@@ -82,7 +82,12 @@ async function leave(page: Page): Promise<void> {
   await page.waitForTimeout(500);
 }
 
+// Known limitation, kept visible: if WebKit starts passing, Playwright reports an unexpected pass.
+const WEBKIT_EPHEMERAL =
+  'WebKit gives no OPFS access handles to ephemeral (private-window-like) contexts; persistent profiles work (ADR-004)';
+
 test('tasks persist in OPFS across reload and a new tab', async ({ page, context, browserName }) => {
+  test.fail(browserName === 'webkit', WEBKIT_EPHEMERAL);
   const log: string[] = [];
   const errors: string[] = [];
   await recordPage(page, log, errors);
@@ -179,6 +184,7 @@ test('tasks persist after the browser is restarted', async ({ playwright, browse
 });
 
 test('app UI starts, renders and saves a typed task', async ({ page, browserName }) => {
+  test.fail(browserName === 'webkit', WEBKIT_EPHEMERAL);
   const log: string[] = [];
   const errors: string[] = [];
   const lines: string[] = [`browser: ${browserName}`];
