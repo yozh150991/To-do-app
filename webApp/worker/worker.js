@@ -15,6 +15,7 @@ import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
 
 const VFS_NAME = 'todo-sahpool';
 const VFS_DIRECTORY = '.todo-db';
+const POOL_CAPACITY = 10;
 const LOG_PREFIX = '[todo-sqlite-worker]';
 
 let sqlite3 = null;
@@ -163,12 +164,17 @@ onmessage = (event) => {
 async function init() {
     try {
         sqlite3 = await sqlite3InitModule();
+        // Each database file and its rollback journal take one slot, and the pool never grows by itself
+        // ("SAH pool is full"). todo.db plus a VACUUM INTO snapshot before a migration (FIX-01) need four;
+        // the rest is headroom. initialCapacity only applies to a new pool, so older pools are topped up.
         pool = await sqlite3.installOpfsSAHPoolVfs({
             name: VFS_NAME,
             directory: VFS_DIRECTORY,
-            initialCapacity: 6,
+            initialCapacity: POOL_CAPACITY,
         });
-        console.info(LOG_PREFIX, 'ready: SQLite', sqlite3.version.libVersion, 'VFS', VFS_NAME);
+        await pool.reserveMinimumCapacity(POOL_CAPACITY);
+        console.info(LOG_PREFIX, 'ready: SQLite', sqlite3.version.libVersion, 'VFS', VFS_NAME,
+            'files', pool.getFileCount() + '/' + pool.getCapacity());
     } catch (error) {
         const reason = error && error.message ? error.message : String(error);
         initError = 'Local database storage is unavailable (OPFS SAHPool): ' + reason;

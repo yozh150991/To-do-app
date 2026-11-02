@@ -8,6 +8,7 @@ import io.github.yozh150991.todo.core.domain.TaskRepository
 import io.github.yozh150991.todo.core.model.IdGenerator
 import kotlinx.browser.document
 import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.await
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
@@ -17,6 +18,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
+import kotlin.js.Promise
 
 /*
  * Ф0 Web spike self-test (spec §3.3, §3.3.1; ADR-004), driven by webApp/e2e (Playwright).
@@ -25,12 +27,15 @@ import kotlinx.serialization.json.putJsonObject
  *   index.html?selftest=verify&workspace=<id> → after a reload / in a new tab: data is still there
  *   index.html?selftest=inspect               → the Inbox of the app's own todo.db,
  *                                               used after the e2e test typed a task into the real UI
+ *   index.html?selftest=clear                 → deletes the database pool from OPFS, as clearing
+ *                                               site data does; the next start must be clean
  *
  * The result is written as JSON into <pre id="selftest" data-status="pass|fail">.
  * write/verify use a separate database file, away from the app's own todo.db.
  */
 
 private const val SELF_TEST_DB = "selftest.db"
+private const val SNAPSHOT_FILE = "/selftest-snapshot.db"
 private val FTS_TEXTS = listOf("Купити молоко та хліб", "Zapłacić rachunek za prąd", "Buy milk on the way home")
 private val FTS_QUERIES = listOf("молоко", "МОЛОКО", "хлі*", "prąd", "prad", "hom*")
 
@@ -81,8 +86,21 @@ private suspend fun AppDatabase.ftsCounts(): Map<String, Long> =
         }
     }
 
+/** The worker's SAHPool directory (webApp/worker/worker.js); NotFoundError means already empty. */
+private fun removeDatabasePool(): Promise<JsAny?> =
+    js("""navigator.storage.getDirectory()
+        .then(function (root) { return root.removeEntry('.todo-db', { recursive: true }); })
+        .catch(function (e) { if (e.name !== 'NotFoundError') throw e; })""")
+
 private suspend fun runSelfTest(phase: String, expectedWorkspace: String?): JsonObject = buildJsonObject {
     val checks = Checks()
+    if (phase == "clear") {
+        // Before any worker exists: nothing holds the OPFS access handles.
+        removeDatabasePool().await<JsAny?>()
+        put("phase", phase)
+        put("status", "pass")
+        return@buildJsonObject
+    }
     val fileName = if (phase == "inspect") AppDatabase.DEFAULT_FILE_NAME else SELF_TEST_DB
     val database = createWebAppDatabase(createWebDriver(), fileName)
     val store = LocalStore(database)
@@ -152,6 +170,32 @@ private suspend fun JsonObjectBuilder.writePhase(
         }
     }
     putFts(database, checks)
+    putSnapshot(database, store, checks)
+}
+
+/**
+ * FIX-01 on the Web (ADR-004): VACUUM INTO a second file of the same OPFS pool, then check the copy
+ * through ATTACH: integrity_check and the same number of tasks.
+ */
+private suspend fun JsonObjectBuilder.putSnapshot(database: AppDatabase, store: LocalStore, checks: Checks) {
+    val tasks = store.tasks.count().toLong()
+    val (integrity, copied) = database.useWriterConnection { transactor ->
+        transactor.usePrepared("VACUUM INTO '$SNAPSHOT_FILE'") { it.step() }
+        transactor.usePrepared("ATTACH DATABASE '$SNAPSHOT_FILE' AS snapshot") { it.step() }
+        try {
+            val integrity = transactor.usePrepared("PRAGMA snapshot.integrity_check") { it.step(); it.getText(0) }
+            val copied = transactor.usePrepared("SELECT COUNT(*) FROM snapshot.task") { it.step(); it.getLong(0) }
+            integrity to copied
+        } finally {
+            transactor.usePrepared("DETACH DATABASE snapshot") { it.step() }
+        }
+    }
+    putJsonObject("vacuum_into") {
+        put("integrity_check", integrity)
+        put("tasks", copied)
+    }
+    checks.check("VACUUM INTO snapshot passes integrity_check", integrity == "ok", integrity)
+    checks.check("snapshot has every task", copied == tasks, "$copied vs $tasks")
 }
 
 private suspend fun JsonObjectBuilder.verifyPhase(

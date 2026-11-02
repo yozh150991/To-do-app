@@ -1,6 +1,10 @@
 package io.github.yozh150991.todo.web
 
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.window.ComposeViewport
 import androidx.sqlite.driver.web.WebWorkerSQLiteDriver
 import io.github.yozh150991.todo.core.database.LocalStore
@@ -28,6 +32,18 @@ internal fun queryParameters(): Map<String, String> =
         .filter { it.isNotEmpty() }
         .associate { part -> part.substringBefore("=") to part.substringAfter("=", "") }
 
+/**
+ * Compose for Web learns the viewport size in a LaunchedEffect, so a frame can be measured before
+ * that with unbounded constraints (Firefox does it). Scaffold and TopAppBar reject those
+ * ("Size(2147483647 x 64) is out of range"), so the app is composed once the size is known.
+ */
+@Composable
+private fun SizedViewport(content: @Composable () -> Unit) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        if (constraints.hasBoundedWidth && constraints.hasBoundedHeight) content()
+    }
+}
+
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
     val parameters = queryParameters()
@@ -48,6 +64,6 @@ fun main() {
         )
     }
     ComposeViewport(document.body!!) {
-        App()
+        SizedViewport { App() }
     }
 }

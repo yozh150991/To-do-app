@@ -102,9 +102,27 @@ test('tasks persist in OPFS across reload and a new tab', async ({ page, context
     // A new tab after the old one is closed takes over the database.
     await page.close();
     const reopened = await context.newPage();
+    await recordPage(reopened, log, errors);
     const takeover = await selfTest(reopened, `selftest=verify&workspace=${workspace}`);
     lines.push(`new tab after closing the old one: ${takeover.status} ${JSON.stringify(takeover.json)}`);
     expect(takeover.status, JSON.stringify(takeover.json)).toBe('pass');
+
+    // Quota and eviction (spec §3.3): storage stays best-effort until navigator.storage.persist().
+    const storage = await reopened.evaluate(async () => {
+      const estimate = await navigator.storage.estimate();
+      return { persisted: await navigator.storage.persisted(), usage: estimate.usage, quota: estimate.quota };
+    });
+    lines.push(`storage: ${JSON.stringify(storage)}`);
+
+    // Clearing site data removes the database; the next start must be clean, not broken.
+    await leave(reopened);
+    const clear = await selfTest(reopened, 'selftest=clear');
+    expect(clear.status, JSON.stringify(clear.json)).toBe('pass');
+    await leave(reopened);
+    const fresh = await selfTest(reopened, 'selftest=write');
+    lines.push(`write after clearing storage: ${fresh.status} new workspace: ${fresh.json.workspace !== workspace}`);
+    expect(fresh.status, JSON.stringify(fresh.json)).toBe('pass');
+    expect(fresh.json.workspace).not.toBe(workspace);
   } finally {
     lines.push(...pageLog(log));
     evidence(`web-${browserName}.txt`, lines);
