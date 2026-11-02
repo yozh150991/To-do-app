@@ -1,0 +1,108 @@
+name: Release
+
+# Publishes a signed APK to GitHub Releases for a version tag (spec §3.4, docs/RELEASE.md).
+# The signing key exists only in the secrets of the `release` environment and is used only here.
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Signed APK for ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: release
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Validate tag and derive version
+        id: version
+        run: |
+          TAG="$GITHUB_REF_NAME"
+          if [[ ! "$TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "::error::Tag $TAG is not vMAJOR.MINOR.PATCH"; exit 1
+          fi
+          MAJOR=${BASH_REMATCH[1]}; MINOR=${BASH_REMATCH[2]}; PATCH=${BASH_REMATCH[3]}
+          if (( MINOR > 999 || PATCH > 999 || MAJOR > 2000 )); then
+            echo "::error::Version parts out of range for versionCode"; exit 1
+          fi
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Tag $TAG must point to a commit on main"; exit 1
+          fi
+          # versionCode must grow with every release (an update over the installed APK requires it).
+          PREVIOUS=$(git tag --list 'v*.*.*' --sort=-v:refname | grep -vx "$TAG" | head -n 1 || true)
+          if [ -n "$PREVIOUS" ] && [ "$(printf '%s\n%s\n' "$PREVIOUS" "$TAG" | sort -V | tail -n 1)" != "$TAG" ]; then
+            echo "::error::$TAG is not newer than the previous release tag $PREVIOUS"; exit 1
+          fi
+          echo "name=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "code=$(( MAJOR * 1000000 + MINOR * 1000 + PATCH ))" >> "$GITHUB_OUTPUT"
+
+      - name: Check the pinned signing certificate
+        run: |
+          PINNED=$(grep -Eo '^[0-9a-f]{64}$' .github/release-signing-cert.sha256 || true)
+          if [ -z "$PINNED" ]; then
+            echo "::error::.github/release-signing-cert.sha256 has no certificate fingerprint yet (docs/RELEASE.md, step 3)"; exit 1
+          fi
+          echo "PINNED_CERT=$PINNED" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build signed release APK
+        env:
+          KEYSTORE_BASE64: ${{ secrets.TODO_RELEASE_KEYSTORE_BASE64 }}
+          TODO_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.TODO_RELEASE_KEYSTORE_PASSWORD }}
+          TODO_RELEASE_KEY_ALIAS: ${{ secrets.TODO_RELEASE_KEY_ALIAS }}
+          TODO_RELEASE_KEY_PASSWORD: ${{ secrets.TODO_RELEASE_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then echo "::error::Secret TODO_RELEASE_KEYSTORE_BASE64 is missing"; exit 1; fi
+          export TODO_RELEASE_KEYSTORE="$RUNNER_TEMP/release.jks"
+          echo "$KEYSTORE_BASE64" | base64 -d > "$TODO_RELEASE_KEYSTORE"
+          ./gradlew --stacktrace :androidApp:assembleRelease \
+            -PversionName=${{ steps.version.outputs.name }} \
+            -PversionCode=${{ steps.version.outputs.code }}
+          rm -f "$TODO_RELEASE_KEYSTORE"
+
+      - name: Verify signature, version and ABIs
+        id: apk
+        run: |
+          APK=androidApp/build/outputs/apk/release/androidApp-release.apk
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -n 1)"
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK" > apksigner.txt
+          # apksigner prints "Signer #1 certificate ..." or "Signer (minSdkVersion=..) certificate ..." by version.
+          ACTUAL=$(grep -E 'certificate SHA-256 digest: ' apksigner.txt | head -n 1 | awk '{print $NF}')
+          if [ "$ACTUAL" != "$PINNED_CERT" ]; then
+            echo "::error::APK is signed with $ACTUAL, expected the pinned release certificate $PINNED_CERT"; exit 1
+          fi
+          BADGING=$("$BUILD_TOOLS/aapt2" dump badging "$APK" | head -n 1)
+          echo "$BADGING"
+          echo "$BADGING" | grep -q "versionCode='${{ steps.version.outputs.code }}'"
+          echo "$BADGING" | grep -q "versionName='${{ steps.version.outputs.name }}'"
+          OUT="todo-${GITHUB_REF_NAME}.apk"
+          cp "$APK" "$OUT"
+          sha256sum "$OUT" > "$OUT.sha256"
+          echo "file=$OUT" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "${{ steps.apk.outputs.file }}" "${{ steps.apk.outputs.file }}.sha256" \
+            --verify-tag \
+            --title "$GITHUB_REF_NAME" \
+            --notes "Android APK ${{ steps.version.outputs.name }} (versionCode ${{ steps.version.outputs.code }}), arm64-v8a. Install over the previous version; never uninstall to update (docs/RELEASE.md). Changes: CHANGELOG.md."

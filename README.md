@@ -5,6 +5,7 @@
 - Чинна специфікація: [`task-manager-scope-roadmap-v2.6.1.md`](task-manager-scope-roadmap-v2.6.1.md) і рішення в [`docs/ADR/`](docs/ADR/README.md).
 - Стан сумісності платформ і версій: [`docs/TECH_COMPATIBILITY.md`](docs/TECH_COMPATIBILITY.md).
 - Модель даних: [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md).
+- Релізи, ключ підпису, встановлення й оновлення на телефоні: [`docs/RELEASE.md`](docs/RELEASE.md).
 - Поточна фаза: **Ф0** (каркас і кросплатформний proof of concept). Робочого релізу ще немає.
 
 ## Структура
@@ -18,7 +19,8 @@
 | `ui` | Спільний Compose-інтерфейс (екран Inbox для Ф0), Koin-модуль ViewModel |
 | `androidApp` | Android entry point (AGP 9, built-in Kotlin) |
 | `desktopApp` | JVM Desktop proof of concept |
-| `tools/ci` | Звіт CI для PR, запуск Android-емулятора |
+| `tools/ci` | Звіт CI для PR, запуск Android-емулятора, тест оновлення поверх, перевірка release-підпису |
+| `tools/release` | Створення ключа підпису (запускає власник, поза репозиторієм) |
 | `tools/deps` | Перевірка актуальних версій залежностей |
 
 ## Вимоги
@@ -54,6 +56,7 @@ Desktop зберігає базу в `~/.todo-app/todo.db`; інше місце 
 
 ## Обмеження поточного стану
 
-- Немає release-підпису, хмарної синхронізації, імпорту з Todoist і нагадувань: це наступні кроки Ф0 і фази Ф1a+.
+- Release-підпис налаштований, але ключа ще немає: перший реліз можливий після кроків 1–4 з `docs/RELEASE.md`.
+- Немає хмарної синхронізації, імпорту з Todoist і нагадувань: це фази Ф1a+.
 - Web-таргет ще не доданий (окремий spike у Ф0).
 - Рядки інтерфейсу поки українською в коді; перенесення в Compose resources (uk/en/pl) заплановане в Ф0.

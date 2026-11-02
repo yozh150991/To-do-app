@@ -1,0 +1,6 @@
+# SHA-256 fingerprint of the release signing certificate: 64 lowercase hex characters on its own line,
+# no colons. Printed by tools/release/create-keystore.sh. The Release workflow refuses to publish an
+# APK signed with any other certificate. Changing this line means the app can no longer be updated
+# in place on existing installs (spec §3.4) — only ever change it via a reviewed PR.
+#
+# Not set yet: replace this comment block's last line with the fingerprint.
