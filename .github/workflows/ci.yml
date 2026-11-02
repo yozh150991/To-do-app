@@ -37,6 +37,7 @@ jobs:
             :core:database:jvmTest \
             :core:domain:jvmTest \
             :core:testing:jvmTest \
+            :ui:jvmTest \
             :androidApp:assembleDebug \
             :desktopApp:jvmJar \
             2>&1 | tee build-log.txt
@@ -170,6 +171,45 @@ jobs:
 
       - name: Fail if the web check failed
         run: test "$(cat web-result.txt 2>/dev/null || echo 1)" = "0"
+
+  # The packaged Desktop app on a virtual display: window, typed task, hard kill, restart (Ф0).
+  desktop-ui:
+    name: Desktop window (Xvfb)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Install the virtual display and X tools
+        run: |
+          sudo apt-get update -q > desktop-ui-apt.txt 2>&1
+          sudo apt-get install -y -q xvfb xdotool imagemagick sqlite3 x11-utils openbox >> desktop-ui-apt.txt 2>&1
+
+      - name: Start the packaged app, type a task, check the database, restart
+        run: xvfb-run -a --server-args="-screen 0 1280x800x24" bash tools/ci/desktop-ui-test.sh
+
+      - name: Upload desktop outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-ui-${{ github.run_number }}
+          if-no-files-found: ignore
+          retention-days: 14
+          path: |
+            desktop-ui-log.txt
+            desktop-ui-result.txt
+            desktopApp/build/reports/runtime-evidence/**
+            desktopApp/build/reports/desktop-ui/**
+
+      - name: Fail if the desktop check failed
+        run: test "$(cat desktop-ui-result.txt 2>/dev/null || echo 1)" = "0"
 
   # supabase-kt module matrix (spec §3.3.1): Auth, PostgREST/RPC, Realtime against a local
   # Supabase stack (supabase start), from the JVM and from Chromium, Firefox and WebKit.
@@ -422,7 +462,7 @@ jobs:
   # mirrored into one PR comment that is updated on every run.
   report:
     name: PR report
-    needs: [build, windows-release, web, supabase-jvm-web, supabase-android, android-device, upgrade]
+    needs: [build, windows-release, web, desktop-ui, supabase-jvm-web, supabase-android, android-device, upgrade]
     if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -451,6 +491,7 @@ jobs:
             --job "Build and JVM tests=${{ needs.build.result }}=build-log.txt" \
             --job "Local release scripts on Windows=$(verdict windows-release-result.txt ${{ needs.windows-release.result }})=windows-release-log.txt" \
             --job "Web in browsers=$(verdict web-result.txt ${{ needs.web.result }})=web-log.txt" \
+            --job "Desktop window (Xvfb)=$(verdict desktop-ui-result.txt ${{ needs.desktop-ui.result }})=desktop-ui-log.txt" \
             --job "Supabase modules (JVM, browsers)=$(verdict supabase-result.txt ${{ needs.supabase-jvm-web.result }})=supabase-log.txt" \
             --job "Supabase modules (Android API 37)=$(verdict supabase-android-result.txt ${{ needs.supabase-android.result }})=supabase-android-log.txt" \
             --job "Android emulator API 26=$(verdict device-26-result.txt ${{ needs.android-device.result }})=device-26-log.txt" \

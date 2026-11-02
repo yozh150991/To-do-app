@@ -8,8 +8,14 @@ import * as path from 'node:path';
 
 const evidenceDir = process.env.EVIDENCE_DIR ?? '../build/reports/runtime-evidence';
 
-// Console noise that says nothing about the app: Skiko probes the GPU name, WebKit/Firefox refuse.
-const BENIGN_CONSOLE = [/WEBGL_debug_renderer_info not enabled/];
+// Console noise that says nothing about the app:
+// - Skiko probes the GPU name, WebKit/Firefox refuse;
+// - Compose resources 1.12.2 reads resource bytes through `wasmExports.memory`, which the Kotlin 2.4
+//   runtime reports as deprecated at console.error level (strings still load). Recheck on CMP updates.
+const BENIGN_CONSOLE = [
+  /WEBGL_debug_renderer_info not enabled/,
+  /Accessing `memory` via `wasmExports` is deprecated/,
+];
 
 // Typed into the real UI, then read back from todo.db by ?selftest=inspect.
 const UI_TASK = 'Typed in the web UI';
@@ -148,6 +154,23 @@ test('tasks persist in OPFS across reload and a new tab', async ({ page, context
   }
 });
 
+test('time zones and DST: golden fixtures TIME-01..04, TIME-08', async ({ page, browserName }) => {
+  // Pure computation, no OPFS: runs in every browser, WebKit's ephemeral context included.
+  const lines: string[] = [`browser: ${browserName}`];
+  const log: string[] = [];
+  const errors: string[] = [];
+  await recordPage(page, log, errors);
+  try {
+    lines.push(`browser zone: ${await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)}`);
+    const time = await selfTest(page, 'selftest=time');
+    lines.push(`status: ${time.status}`, ...((time.json.results as string[] | undefined) ?? [String(time.json.error)]));
+    expect(time.status, JSON.stringify(time.json)).toBe('pass');
+  } finally {
+    lines.push(...pageLog(log));
+    evidence(`time-${browserName}.txt`, lines);
+  }
+});
+
 test('supabase-kt modules against a local Supabase stack', async ({ page, browserName }) => {
   // Runs in the CI job "Supabase modules" (supabase start); skipped everywhere else.
   const url = process.env.SUPABASE_URL;
@@ -208,6 +231,13 @@ test('app UI starts, renders and saves a typed task', async ({ page, browserName
   const errors: string[] = [];
   const lines: string[] = [`browser: ${browserName}`];
   await recordPage(page, log, errors);
+  // Localized strings come from composeResources/*.cvr files next to the page.
+  const resources: string[] = [];
+  page.on('response', (response) => {
+    if (response.url().includes('composeResources')) {
+      resources.push(`${response.status()} ${new URL(response.url()).pathname}`);
+    }
+  });
 
   try {
     // Compose for Web draws through WebGL 2 (Skiko); headless browsers without a GPU may lack it.
@@ -227,6 +257,9 @@ test('app UI starts, renders and saves a typed task', async ({ page, browserName
     fs.mkdirSync(evidenceDir, { recursive: true });
     await page.screenshot({ path: path.join(evidenceDir, `ui-${browserName}.png`) });
     lines.push(`errors after start: ${JSON.stringify(errors)}`);
+    lines.push('compose resources:', ...resources.map((line) => `  ${line}`));
+    expect(resources.length, 'no composeResources requests').toBeGreaterThan(0);
+    expect(resources.filter((line) => !line.startsWith('200')), 'failed composeResources requests').toEqual([]);
 
     // The new-task field sits under the 64dp top bar, 16dp from the left edge (InboxScreen).
     await page.mouse.click(200, 92);
