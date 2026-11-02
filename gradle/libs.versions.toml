@@ -17,6 +17,9 @@ kotlinx-browser = "0.5.0"
 
 kotlinx-coroutines = "1.11.0"
 kotlinx-datetime = "0.8.0"
+# supabase-kt 3.8.0 (26.08.2026) is built with Ktor 3.5.1: the engines use the same version.
+supabase = "3.8.0"
+ktor = "3.5.1"
 kotlinx-serialization = "1.12.0"
 koin = "4.2.2"
 
@@ -44,6 +47,11 @@ kotlinx-coroutines-swing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "kotlinx-coroutines" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinx-coroutines" }
 kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinx-datetime" }
+supabase-auth = { module = "io.github.jan-tennert.supabase:auth-kt", version.ref = "supabase" }
+supabase-postgrest = { module = "io.github.jan-tennert.supabase:postgrest-kt", version.ref = "supabase" }
+supabase-realtime = { module = "io.github.jan-tennert.supabase:realtime-kt", version.ref = "supabase" }
+ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
+ktor-client-js = { module = "io.ktor:ktor-client-js", version.ref = "ktor" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
 
 koin-core = { module = "io.insert-koin:koin-core", version.ref = "koin" }

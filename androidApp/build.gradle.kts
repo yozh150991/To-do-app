@@ -89,6 +89,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
 
     androidTestImplementation(projects.core.testing)
+    androidTestImplementation(projects.core.sync)
     androidTestImplementation(libs.junit4)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.ext.junit)

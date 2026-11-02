@@ -9,7 +9,9 @@ import io.github.yozh150991.todo.core.domain.TaskRepository
 import io.github.yozh150991.todo.core.model.IdGenerator
 import io.github.yozh150991.todo.core.testing.SchemaV1Fixture
 import io.github.yozh150991.todo.core.testing.V1Database
+import io.github.yozh150991.todo.core.sync.SupabaseProbe
 import kotlinx.browser.document
+import kotlinx.browser.window
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.await
 import kotlinx.coroutines.flow.first
@@ -33,6 +35,8 @@ import kotlin.js.Promise
  *   index.html?selftest=clear                 → deletes the database pool from OPFS, as clearing
  *                                               site data does; the next start must be clean
  *   index.html?selftest=migrate               → a genuine schema v1 file, opened by the v2 AppDatabase
+ *   index.html?selftest=supabase&url=…&key=…  → supabase-kt Auth / PostgREST / Realtime against a
+ *                                               local Supabase stack (no database involved)
  *
  * The result is written as JSON into <pre id="selftest" data-status="pass|fail">.
  * write/verify use a separate database file, away from the app's own todo.db.
@@ -53,13 +57,14 @@ private class Checks {
     }
 }
 
-internal fun startSelfTest(phase: String, expectedWorkspace: String?) {
+internal fun startSelfTest(phase: String, parameters: Map<String, String>) {
+    val expectedWorkspace = parameters["workspace"]
     val output = document.getElementById("selftest") ?: return
     output.setAttribute("style", "display: block")
     output.textContent = "running $phase..."
     MainScope().launch {
         val json = try {
-            runSelfTest(phase, expectedWorkspace)
+            if (phase == "supabase") supabaseProbe(parameters) else runSelfTest(phase, expectedWorkspace)
         } catch (e: Throwable) {
             buildJsonObject {
                 put("phase", phase)
@@ -96,6 +101,19 @@ private fun removeDatabasePool(): Promise<JsAny?> =
     js("""navigator.storage.getDirectory()
         .then(function (root) { return root.removeEntry('.todo-db', { recursive: true }); })
         .catch(function (e) { if (e.name !== 'NotFoundError') throw e; })""")
+
+/** supabase-kt modules from the browser (spec §3.3.1); see core/sync SupabaseProbe. */
+private suspend fun supabaseProbe(parameters: Map<String, String>): JsonObject {
+    val url = parameters["url"].orEmpty()
+    val key = parameters["key"].orEmpty()
+    val checks = SupabaseProbe.run(url, key, "browser ${window.navigator.userAgent}")
+    return buildJsonObject {
+        put("phase", "supabase")
+        put("url", url)
+        putJsonArray("checks") { checks.forEach { add(JsonPrimitive(it.toString())) } }
+        put("status", if (checks.isNotEmpty() && checks.all { it.passed }) "pass" else "fail")
+    }
+}
 
 private suspend fun runSelfTest(phase: String, expectedWorkspace: String?): JsonObject = buildJsonObject {
     val checks = Checks()

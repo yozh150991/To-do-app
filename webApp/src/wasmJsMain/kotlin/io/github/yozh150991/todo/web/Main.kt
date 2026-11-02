@@ -65,7 +65,7 @@ fun main() {
     val parameters = queryParameters()
     val selfTestPhase = parameters["selftest"]
     if (selfTestPhase != null) {
-        startSelfTest(selfTestPhase, parameters["workspace"])
+        startSelfTest(selfTestPhase, parameters)
         return
     }
 

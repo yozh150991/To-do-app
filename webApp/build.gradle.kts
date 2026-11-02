@@ -34,6 +34,8 @@ kotlin {
             implementation(projects.core.database)
             // Plain-SQL fixtures (schema v1 + seed) for the migration self-test; Ф0 spike only.
             implementation(projects.core.testing)
+            // supabase-kt module probe (?selftest=supabase); Ф0 spike only.
+            implementation(projects.core.sync)
             implementation(libs.sqlite.web)
             implementation(libs.kotlinx.browser)
             implementation(libs.kotlinx.coroutines.core)

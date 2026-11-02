@@ -169,6 +169,130 @@ jobs:
       - name: Fail if the web check failed
         run: test "$(cat web-result.txt 2>/dev/null || echo 1)" = "0"
 
+  # supabase-kt module matrix (spec §3.3.1): Auth, PostgREST/RPC, Realtime against a local
+  # Supabase stack (supabase start), from the JVM and from Chromium, Firefox and WebKit.
+  supabase-jvm-web:
+    name: Supabase modules (JVM, browsers)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      SUPABASE_CLI: "2.122.0"
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install the Supabase CLI
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL "https://github.com/supabase/cli/releases/download/v${SUPABASE_CLI}/supabase_linux_amd64.tar.gz" \
+            | tar -xz -C "$HOME/.local/bin" supabase
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Start the local Supabase stack
+        run: bash tools/ci/supabase-start.sh supabase-log.txt
+
+      - name: Probe from the JVM, build the web app
+        run: |
+          set -a; . ./supabase.env; set +a
+          status=0
+          ./gradlew --stacktrace --continue :core:sync:jvmTest :webApp:wasmJsBrowserDistribution >> supabase-log.txt 2>&1 || status=1
+          echo "$status" > supabase-result.txt
+          tail -n 30 supabase-log.txt
+
+      - name: Probe from the browsers
+        if: hashFiles('webApp/build/dist/wasmJs/productionExecutable/index.html') != ''
+        working-directory: webApp/e2e
+        run: |
+          set -a; . ../../supabase.env; set +a
+          npm ci
+          npx playwright install --with-deps chromium firefox webkit > ../../playwright-install.txt 2>&1
+          if ! npx playwright test -g "supabase-kt" 2>&1 | tee -a ../../supabase-log.txt; then echo 1 > ../../supabase-result.txt; fi
+
+      - name: Upload Supabase outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: supabase-jvm-web-${{ github.run_number }}
+          if-no-files-found: ignore
+          retention-days: 14
+          path: |
+            supabase-log.txt
+            supabase-result.txt
+            core/sync/build/reports/runtime-evidence/**
+            core/sync/build/test-results/**
+            webApp/build/reports/runtime-evidence/supabase-*.txt
+            webApp/build/test-results/**
+
+      - name: Fail if a Supabase check failed
+        run: test "$(cat supabase-result.txt 2>/dev/null || echo 1)" = "0"
+
+  supabase-android:
+    name: Supabase modules (Android API 37)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      SUPABASE_CLI: "2.122.0"
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Install the Supabase CLI
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL "https://github.com/supabase/cli/releases/download/v${SUPABASE_CLI}/supabase_linux_amd64.tar.gz" \
+            | tar -xz -C "$HOME/.local/bin" supabase
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Start the local Supabase stack
+        run: bash tools/ci/supabase-start.sh supabase-android-log.txt
+
+      - name: Assemble app and test APKs
+        run: ./gradlew --stacktrace :androidApp:assembleDebug :androidApp:assembleDebugAndroidTest
+
+      - name: Probe from the emulator
+        run: >-
+          bash tools/ci/run-emulator.sh supabase-android 37.0 google_atd
+          bash tools/ci/supabase-device-test.sh
+
+      - name: Upload Supabase Android outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: supabase-android-${{ github.run_number }}
+          if-no-files-found: ignore
+          retention-days: 14
+          path: |
+            supabase-android-log.txt
+            supabase-android-result.txt
+            supabase-android-emulator.txt
+            androidApp/build/reports/runtime-evidence/supabase-android.txt
+            androidApp/build/outputs/androidTest-results/**
+
+      - name: Fail if the Android Supabase check failed
+        run: test "$(cat supabase-android-result.txt 2>/dev/null || echo 1)" = "0"
+
   android-device:
     name: Android emulator API ${{ matrix.api }}
     runs-on: ubuntu-latest
@@ -295,7 +419,7 @@ jobs:
   # mirrored into one PR comment that is updated on every run.
   report:
     name: PR report
-    needs: [build, windows-release, web, android-device, upgrade]
+    needs: [build, windows-release, web, supabase-jvm-web, supabase-android, android-device, upgrade]
     if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -324,6 +448,8 @@ jobs:
             --job "Build and JVM tests=${{ needs.build.result }}=build-log.txt" \
             --job "Local release scripts on Windows=$(verdict windows-release-result.txt ${{ needs.windows-release.result }})=windows-release-log.txt" \
             --job "Web in browsers=$(verdict web-result.txt ${{ needs.web.result }})=web-log.txt" \
+            --job "Supabase modules (JVM, browsers)=$(verdict supabase-result.txt ${{ needs.supabase-jvm-web.result }})=supabase-log.txt" \
+            --job "Supabase modules (Android API 37)=$(verdict supabase-android-result.txt ${{ needs.supabase-android.result }})=supabase-android-log.txt" \
             --job "Android emulator API 26=$(verdict device-26-result.txt ${{ needs.android-device.result }})=device-26-log.txt" \
             --job "Android emulator API 37=$(verdict device-37-result.txt ${{ needs.android-device.result }})=device-37-log.txt" \
             --job "Upgrade over previous version=$(verdict upgrade-result.txt ${{ needs.upgrade.result }})=upgrade-log.txt" \

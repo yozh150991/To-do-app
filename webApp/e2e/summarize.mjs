@@ -17,9 +17,12 @@ if (fs.existsSync(resultsFile)) {
       for (const t of spec.tests ?? []) {
         const project = t.projectName;
         // test.fail() marks a known limitation: an expected failure counts as a pass of the check.
-        const outcome = t.status === 'expected'
-          ? (t.expectedStatus === 'failed' ? 'passed (known limitation, expected failure)' : 'passed')
-          : (t.results?.at(-1)?.status ?? 'missing');
+        // test.skip() (the Supabase check outside its own CI job) is neither a pass nor a failure.
+        const outcome = t.status === 'skipped'
+          ? 'skipped'
+          : t.status === 'expected'
+            ? (t.expectedStatus === 'failed' ? 'passed (known limitation, expected failure)' : 'passed')
+            : (t.results?.at(-1)?.status ?? 'missing');
         (byProject[project] ??= []).push(`${outcome.padEnd(8)} ${spec.title}`);
       }
     }
@@ -32,7 +35,8 @@ const lines = [];
 let ok = true;
 for (const project of ['chromium', 'firefox', 'webkit']) {
   const tests = byProject[project] ?? [];
-  const passed = tests.length > 0 && tests.every((line) => line.startsWith('passed'));
+  const ran = tests.filter((line) => !line.startsWith('skipped'));
+  const passed = ran.length > 0 && ran.every((line) => line.startsWith('passed'));
   const required = REQUIRED.includes(project);
   if (required && !passed) ok = false;
   const verdict = passed ? 'pass' : required ? 'FAIL' : 'not passing (recorded, not required in Ф0)';

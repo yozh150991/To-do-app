@@ -148,6 +148,25 @@ test('tasks persist in OPFS across reload and a new tab', async ({ page, context
   }
 });
 
+test('supabase-kt modules against a local Supabase stack', async ({ page, browserName }) => {
+  // Runs in the CI job "Supabase modules" (supabase start); skipped everywhere else.
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_ANON_KEY;
+  test.skip(!url || !key, 'no local Supabase stack (SUPABASE_URL / SUPABASE_ANON_KEY)');
+  const lines: string[] = [`browser: ${browserName}`, `stack: ${url}`];
+  const log: string[] = [];
+  const errors: string[] = [];
+  await recordPage(page, log, errors);
+  try {
+    const probe = await selfTest(page, `selftest=supabase&url=${url}&key=${key}`);
+    lines.push(`status: ${probe.status}`, ...((probe.json.checks as string[] | undefined) ?? [String(probe.json.error)]));
+    expect(probe.status, JSON.stringify(probe.json)).toBe('pass');
+  } finally {
+    lines.push(...pageLog(log));
+    evidence(`supabase-${browserName}.txt`, lines);
+  }
+});
+
 test('tasks persist after the browser is restarted', async ({ playwright, browserName }, testInfo) => {
   // A persistent profile on disk, closed and launched again: what a real browser restart does.
   // Also shows whether WebKit offers OPFS outside Playwright's ephemeral contexts.
