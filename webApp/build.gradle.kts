@@ -32,6 +32,8 @@ kotlin {
             implementation(projects.ui)
             implementation(projects.core.domain)
             implementation(projects.core.database)
+            // Plain-SQL fixtures (schema v1 + seed) for the migration self-test; Ф0 spike only.
+            implementation(projects.core.testing)
             implementation(libs.sqlite.web)
             implementation(libs.kotlinx.browser)
             implementation(libs.kotlinx.coroutines.core)

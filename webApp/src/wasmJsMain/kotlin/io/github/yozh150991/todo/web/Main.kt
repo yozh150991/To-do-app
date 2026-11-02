@@ -25,6 +25,22 @@ internal fun createSqliteWorker(): Worker =
 
 internal fun createWebDriver(): WebWorkerSQLiteDriver = WebWorkerSQLiteDriver(createSqliteWorker())
 
+/** Compose for Web draws through WebGL 2 (Skiko); without it the page would stay blank. */
+internal fun webGl2Available(): Boolean = js("!!document.createElement('canvas').getContext('webgl2')")
+
+// Plain HTML, shown when Compose cannot start; moves to Compose resources with the other strings.
+private const val WEBGL_UNAVAILABLE =
+    "Застосунку потрібен WebGL 2, а цей браузер його зараз не дає. Увімкніть апаратне прискорення " +
+        "(або WebGL) у налаштуваннях браузера й перезавантажте сторінку."
+
+private fun showPlainMessage(text: String) {
+    val message = document.createElement("p")
+    message.setAttribute("id", "startup-error")
+    message.setAttribute("style", "margin: 24px; font: 16px/1.5 system-ui, sans-serif; max-width: 40em")
+    message.textContent = text
+    document.body?.appendChild(message)
+}
+
 /** Query string as a map; values are not URL-decoded (only simple ASCII values are used). */
 internal fun queryParameters(): Map<String, String> =
     window.location.search.removePrefix("?")
@@ -50,6 +66,11 @@ fun main() {
     val selfTestPhase = parameters["selftest"]
     if (selfTestPhase != null) {
         startSelfTest(selfTestPhase, parameters["workspace"])
+        return
+    }
+
+    if (!webGl2Available()) {
+        showPlainMessage(WEBGL_UNAVAILABLE)
         return
     }
 

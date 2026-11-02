@@ -158,6 +158,7 @@ jobs:
             web-result.txt
             webApp/build/reports/runtime-evidence/**
             webApp/build/test-results/**
+            webApp/build/dist/wasmJs/productionExecutable/**
             webApp/e2e/test-results/**
             kotlin-js-store/**
 

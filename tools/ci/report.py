@@ -156,10 +156,16 @@ def main():
 
     apks = sorted(glob.glob("androidApp/build/outputs/apk/**/*.apk", recursive=True) + glob.glob("dist/*.apk"))
     jars = sorted(glob.glob("desktopApp/build/libs/*.jar"))
-    if apks or jars:
+    web = sorted(p for p in glob.glob("webApp/build/dist/wasmJs/productionExecutable/*") if os.path.isfile(p))
+    if apks or jars or web:
         out.append("#### Artifacts")
         for path in apks + jars:
             out.append(f"- `{path}` — {os.path.getsize(path) / 1024 / 1024:.2f} MiB")
+        if web:
+            total = sum(os.path.getsize(p) for p in web)
+            out.append(f"- Web build `webApp/build/dist/wasmJs/productionExecutable/` — {total / 1024 / 1024:.2f} MiB in {len(web)} files:")
+            for path in web:
+                out.append(f"  - `{os.path.basename(path)}` — {os.path.getsize(path) / 1024:.0f} KiB")
         out.append("")
 
     status = subprocess.run(

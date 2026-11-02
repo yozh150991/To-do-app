@@ -1,11 +1,14 @@
 package io.github.yozh150991.todo.web
 
 import androidx.room3.*
+import androidx.sqlite.execSQL
 import io.github.yozh150991.todo.core.database.AppDatabase
 import io.github.yozh150991.todo.core.database.LocalStore
 import io.github.yozh150991.todo.core.database.createWebAppDatabase
 import io.github.yozh150991.todo.core.domain.TaskRepository
 import io.github.yozh150991.todo.core.model.IdGenerator
+import io.github.yozh150991.todo.core.testing.SchemaV1Fixture
+import io.github.yozh150991.todo.core.testing.V1Database
 import kotlinx.browser.document
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.await
@@ -29,6 +32,7 @@ import kotlin.js.Promise
  *                                               used after the e2e test typed a task into the real UI
  *   index.html?selftest=clear                 → deletes the database pool from OPFS, as clearing
  *                                               site data does; the next start must be clean
+ *   index.html?selftest=migrate               → a genuine schema v1 file, opened by the v2 AppDatabase
  *
  * The result is written as JSON into <pre id="selftest" data-status="pass|fail">.
  * write/verify use a separate database file, away from the app's own todo.db.
@@ -36,6 +40,7 @@ import kotlin.js.Promise
 
 private const val SELF_TEST_DB = "selftest.db"
 private const val SNAPSHOT_FILE = "/selftest-snapshot.db"
+private const val MIGRATE_DB = "migrate.db"
 private val FTS_TEXTS = listOf("Купити молоко та хліб", "Zapłacić rachunek za prąd", "Buy milk on the way home")
 private val FTS_QUERIES = listOf("молоко", "МОЛОКО", "хлі*", "prąd", "prad", "hom*")
 
@@ -94,6 +99,14 @@ private fun removeDatabasePool(): Promise<JsAny?> =
 
 private suspend fun runSelfTest(phase: String, expectedWorkspace: String?): JsonObject = buildJsonObject {
     val checks = Checks()
+    if (phase == "migrate") {
+        put("phase", phase)
+        migratePhase(checks)
+        putJsonArray("passed") { checks.passed.forEach { add(JsonPrimitive(it)) } }
+        putJsonArray("failed") { checks.failed.forEach { add(JsonPrimitive(it)) } }
+        put("status", if (checks.failed.isEmpty()) "pass" else "fail")
+        return@buildJsonObject
+    }
     if (phase == "clear") {
         // Before any worker exists: nothing holds the OPFS access handles.
         removeDatabasePool().await<JsAny?>()
@@ -196,6 +209,62 @@ private suspend fun JsonObjectBuilder.putSnapshot(database: AppDatabase, store: 
     }
     checks.check("VACUUM INTO snapshot passes integrity_check", integrity == "ok", integrity)
     checks.check("snapshot has every task", copied == tasks, "$copied vs $tasks")
+}
+
+/**
+ * Room AutoMigration 1 → 2 through the Web worker, mirroring DatabaseScenarios.migrationFromV1PreservesData
+ * on Android/JVM: the same v1 DDL and seed (core/testing) go straight through the driver, then the v2
+ * AppDatabase opens the file. The FIX-01 snapshot around it on the Web is a Ф7 item (ADR-004 п. 7).
+ */
+private suspend fun JsonObjectBuilder.migratePhase(checks: Checks) {
+    // One driver = one worker = one owner of the OPFS pool, for the v1 setup and for Room.
+    val driver = createWebDriver()
+    val connection = driver.open(MIGRATE_DB)
+    try {
+        val fresh = connection.prepare("PRAGMA user_version").use { it.step(); it.getLong(0) } == 0L
+        checks.check("fresh v1 file", fresh)
+        if (!fresh) return
+        SchemaV1Fixture.statements.forEach { connection.execSQL(it) }
+        connection.execSQL("PRAGMA user_version = ${SchemaV1Fixture.VERSION}")
+        V1Database.seedStatements.forEach { connection.execSQL(it) }
+    } finally {
+        connection.close()
+    }
+
+    val database = createWebAppDatabase(driver, MIGRATE_DB)
+    val version = database.textQuery("PRAGMA user_version")
+    put("user_version", version)
+    checks.check("schema migrated to v${AppDatabase.SCHEMA_VERSION}", version == "${AppDatabase.SCHEMA_VERSION}", version)
+    val counts = V1Database.expectedCounts.mapValues { (table, _) -> database.textQuery("SELECT COUNT(*) FROM $table").toLong() }
+    putJsonObject("counts") { counts.forEach { (table, n) -> put(table, n) } }
+    checks.check("rows preserved", counts == V1Database.expectedCounts, counts.toString())
+    checks.check("integrity_check", database.textQuery("PRAGMA integrity_check") == "ok")
+    checks.check("foreign_key_check", database.textQuery("SELECT COUNT(*) FROM pragma_foreign_key_check()") == "0")
+    val newTables = database.textQuery(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('section', 'label', 'task_label')",
+    )
+    checks.check("v2 tables created", newTables == "3", newTables)
+    val sectionFk = database.textQuery(
+        "SELECT COUNT(*) FROM pragma_foreign_key_list('task') WHERE \"table\" = 'section' AND \"from\" = 'section_id'",
+    )
+    checks.check("task.section_id references section", sectionFk == "1", sectionFk)
+
+    val store = LocalStore(database)
+    val t3 = store.tasks.getById("t3")
+    checks.check(
+        "v1 task fields kept",
+        t3 != null && t3.dueDate == "2026-11-02" && t3.dueTz == "Europe/Warsaw",
+        t3.toString(),
+    )
+    if (t3 != null) {
+        val orphan = runCatching { store.tasks.update(t3.copy(sectionId = "missing-section")) }
+        checks.check("section_id is enforced", orphan.isFailure)
+    }
+    val repository = TaskRepository(store)
+    checks.check("same workspace", repository.workspace().workspaceId == V1Database.WORKSPACE_ID)
+    repository.createTask("Після міграції")
+    val lastSeq = store.outbox.all().maxOf { it.localSeq }
+    checks.check("local_seq continues", lastSeq == V1Database.SEEDED_LOCAL_SEQ + 1, "$lastSeq")
 }
 
 private suspend fun JsonObjectBuilder.verifyPhase(

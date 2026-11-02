@@ -51,12 +51,20 @@ async function recordPage(page: Page, log: string[], errors: string[]): Promise<
   });
 }
 
+/** Production wasm frames carry no names; dropping them keeps causes and suppressed exceptions visible. */
+function compact(entry: string): string {
+  const lines = entry.split('\n');
+  const kept = lines.filter((line) => !line.includes('wasm-function['));
+  const dropped = lines.length - kept.length;
+  return dropped > 0 ? `${kept.join('\n')}\n    (${dropped} unnamed wasm frames omitted)` : entry;
+}
+
 /** Errors first: the CI report keeps only the first 6000 characters of each evidence file. */
 function pageLog(log: string[]): string[] {
   const isError = (line: string) => /^\[(pageerror|window error event|unhandledrejection|error)\]/.test(line);
   return [
-    'page errors:', ...log.filter(isError).map((line) => `  ${line}`),
-    'page log:', ...log.filter((line) => !isError(line)).map((line) => `  ${line}`),
+    'page errors:', ...log.filter(isError).map((line) => `  ${compact(line)}`),
+    'page log:', ...log.filter((line) => !isError(line)).map((line) => `  ${compact(line)}`),
   ];
 }
 
@@ -98,6 +106,12 @@ test('tasks persist in OPFS across reload and a new tab', async ({ page, context
     const verify = await selfTest(page, `selftest=verify&workspace=${workspace}`);
     lines.push(`verify after reload: ${verify.status} ${JSON.stringify(verify.json)}`);
     expect(verify.status, JSON.stringify(verify.json)).toBe('pass');
+
+    // Schema upgrade in the browser: a genuine v1 file opened by the v2 Room database.
+    await leave(page);
+    const migrate = await selfTest(page, 'selftest=migrate');
+    lines.push(`migration v1 -> v2: ${migrate.status} ${JSON.stringify(migrate.json)}`);
+    expect(migrate.status, JSON.stringify(migrate.json)).toBe('pass');
 
     // A new tab after the old one is closed takes over the database.
     await page.close();
@@ -171,8 +185,19 @@ test('app UI starts, renders and saves a typed task', async ({ page, browserName
   await recordPage(page, log, errors);
 
   try {
+    // Compose for Web draws through WebGL 2 (Skiko); headless browsers without a GPU may lack it.
+    const webgl = await page.evaluate(() => {
+      const gl = document.createElement('canvas').getContext('webgl2');
+      return gl ? `${gl.getParameter(gl.VERSION)}; ${gl.getParameter(gl.RENDERER)}` : 'unavailable';
+    });
+    lines.push(`webgl2: ${webgl}`);
+
     await page.goto('/index.html');
-    await expect(page.locator('canvas').first()).toBeVisible({ timeout: 120_000 });
+    // Either Compose's canvas or the plain startup message (e.g. no WebGL 2) appears.
+    await expect(page.locator('canvas, #startup-error').first()).toBeVisible({ timeout: 120_000 });
+    const startupError = page.locator('#startup-error');
+    if ((await startupError.count()) > 0) lines.push(`startup message: ${await startupError.textContent()}`);
+    expect(await startupError.count(), 'the app showed its startup error instead of the UI').toBe(0);
     await page.waitForTimeout(3_000);
     fs.mkdirSync(evidenceDir, { recursive: true });
     await page.screenshot({ path: path.join(evidenceDir, `ui-${browserName}.png`) });

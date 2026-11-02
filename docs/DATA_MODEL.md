@@ -62,5 +62,6 @@
 
 - Драйвер: `BundledSQLiteDriver` на Android і JVM.
 - Журнал: WAL (`JournalMode.WRITE_AHEAD_LOGGING`, перевіряється тестом).
+- **Web (ADR-004):** `WebWorkerSQLiteDriver` і власний worker на SQLite WASM 3.54.1 з VFS `opfs-sahpool` (файли в Origin Private File System браузера), журнал `TRUNCATE`, одне з'єднання, одна вкладка. Схема, DAO і `TaskRepository` ті самі. Міграція v1 → v2 у браузері — та сама Room AutoMigration; захист snapshot (FIX-01) на Web — до релізу Web у Ф7, примітив `VACUUM INTO` у браузері вже перевірено.
 - `fallbackToDestructiveMigration` не використовується.
-- FTS5-токенайзер: **`unicode61 remove_diacritics 2`** (ADR-001 п. 5). Перевірено на JVM, Android API 26 і API 37: точний збіг, регістр кирилиці, префіксний пошук і пошук польських слів без діакритики (`prad` → `prąd`). Сама FTS-таблиця для задач з'явиться у Ф6a.
+- FTS5-токенайзер: **`unicode61 remove_diacritics 2`** (ADR-001 п. 5). Перевірено на JVM, Android API 26 і API 37, а також у браузерах (Chromium, Firefox, WebKit): точний збіг, регістр кирилиці, префіксний пошук і пошук польських слів без діакритики (`prad` → `prąd`). Сама FTS-таблиця для задач з'явиться у Ф6a.
