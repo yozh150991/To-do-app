@@ -27,6 +27,12 @@ kotlin {
             api(libs.kotlinx.datetime)
             api(libs.kotlinx.serialization.json)
         }
+        wasmJsMain.dependencies {
+            // IANA time zone rules for kotlinx-datetime on the Web (TimeZoneRules.wasmJs.kt).
+            // 2.23.0 is the newest release whose peer range still accepts @js-joda/core 3.2.0,
+            // the version kotlinx-datetime 0.8.0 depends on (2.24+ require core >= 5.7).
+            implementation(npm("@js-joda/timezone", "2.23.0"))
+        }
         commonTest.dependencies {
             implementation(kotlin("test"))
         }

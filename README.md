@@ -58,7 +58,7 @@ Desktop зберігає базу в `~/.todo-app/todo.db`; інше місце 
 ## Як вносяться зміни
 
 - `main` змінюється лише через pull request.
-- CI (`.github/workflows/ci.yml`) на кожен PR збирає APK, JAR і Web-збірку, запускає JVM-тести, instrumented-тести на емуляторах Android 8.0 (API 26) і Android 17 (API 37), тести Web у Chromium, Firefox і WebKit, тест оновлення поверх і скрипти релізу на Linux і Windows, та публікує зведений звіт коментарем у PR, включно з доказами runtime.
+- CI (`.github/workflows/ci.yml`) на кожен PR збирає APK, JAR і Web-збірку, запускає JVM-тести, instrumented-тести на емуляторах Android 8.0 (API 26) і Android 17 (API 37), тести Web у Chromium, Firefox і WebKit, запуск упакованого Desktop-застосунку на віртуальному дисплеї, тест оновлення поверх і скрипти релізу на Linux і Windows, та публікує зведений звіт коментарем у PR, включно з доказами runtime.
 - Нова схема БД = нова версія Room + міграція + тест; деструктивна міграція заборонена (spec §3.2, §12.4). Відкриття бази в застосунку — тільки через `openAppDatabase` (snapshot перед оновленням і відкат при збої, `docs/DATA_MODEL.md`).
 - Рішення, що відхиляються від специфікації, оформлюються ADR (`docs/ADR/`).
 
