@@ -12,6 +12,8 @@ kotlin {
         namespace = "io.github.yozh150991.todo.ui"
         compileSdk = libs.versions.android.compileSdk.get().toInt()
         minSdk = libs.versions.android.minSdk.get().toInt()
+        // Compose Multiplatform resources (strings) are packaged as Android resources too.
+        androidResources.enable = true
     }
     jvm()
     @OptIn(ExperimentalWasmDsl::class)
@@ -30,6 +32,7 @@ kotlin {
             api(libs.compose.foundation)
             api(libs.compose.ui)
             api(libs.compose.material3)
+            implementation(libs.compose.components.resources)
             implementation(libs.jetbrains.lifecycle.viewmodel.compose)
             implementation(libs.jetbrains.lifecycle.runtime.compose)
             implementation(libs.koin.core)
@@ -39,4 +42,10 @@ kotlin {
             implementation(kotlin("test"))
         }
     }
+}
+
+// Shared localization (spec §13.2): composeResources/values (English default), values-uk, values-pl.
+compose.resources {
+    publicResClass = false
+    packageOfResClass = "io.github.yozh150991.todo.ui.resources"
 }

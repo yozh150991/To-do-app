@@ -34,7 +34,7 @@
 
 ```bash
 # Тести домену й бази на JVM (реальний SQLite через BundledSQLiteDriver)
-./gradlew :core:model:jvmTest :core:database:jvmTest :core:domain:jvmTest :core:testing:jvmTest
+./gradlew :core:model:jvmTest :core:database:jvmTest :core:domain:jvmTest :core:testing:jvmTest :ui:jvmTest
 
 # Ті самі сценарії бази на підключеному пристрої або емуляторі
 ./gradlew :androidApp:connectedDebugAndroidTest
@@ -67,4 +67,4 @@ Desktop зберігає базу в `~/.todo-app/todo.db`; інше місце 
 - Ключ підпису створено, відбиток закріплено; перший реліз збирається `tools/release/build-release.sh` (потрібна Android Studio на комп'ютері, `docs/RELEASE.md`).
 - Немає хмарної синхронізації, імпорту з Todoist і нагадувань: це фази Ф1a+.
 - Web — proof of concept, не реліз (реліз Web — Ф7): працює в Chromium і Firefox, у WebKit/Safari — поза приватним режимом; одночасно відкрита лише одна вкладка; до синхронізації (Ф5) дані живуть тільки в цьому браузері (ADR-004).
-- Рядки інтерфейсу поки українською в коді; перенесення в Compose resources (uk/en/pl) заплановане в Ф0.
+- Рядки інтерфейсу — у Compose resources `ui/src/commonMain/composeResources`: англійська (за замовчуванням), українська, польська; мова береться з системи. Новий рядок додається в усі три файли (це перевіряє `StringResourcesTest`).

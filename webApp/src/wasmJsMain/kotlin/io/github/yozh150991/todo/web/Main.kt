@@ -28,10 +28,20 @@ internal fun createWebDriver(): WebWorkerSQLiteDriver = WebWorkerSQLiteDriver(cr
 /** Compose for Web draws through WebGL 2 (Skiko); without it the page would stay blank. */
 internal fun webGl2Available(): Boolean = js("!!document.createElement('canvas').getContext('webgl2')")
 
-// Plain HTML, shown when Compose cannot start; moves to Compose resources with the other strings.
-private const val WEBGL_UNAVAILABLE =
-    "Застосунку потрібен WebGL 2, а цей браузер його зараз не дає. Увімкніть апаратне прискорення " +
-        "(або WebGL) у налаштуваннях браузера й перезавантажте сторінку."
+internal fun browserLanguage(): String = js("(navigator.language || 'en').slice(0, 2).toLowerCase()")
+
+/**
+ * Plain HTML, shown when Compose cannot start, so it cannot use the Compose resources of the UI;
+ * the same three languages (uk/pl, English otherwise).
+ */
+private fun webGlUnavailableMessage(): String = when (browserLanguage()) {
+    "uk" -> "Застосунку потрібен WebGL 2, а цей браузер його зараз не дає. Увімкніть апаратне " +
+        "прискорення (або WebGL) у налаштуваннях браузера й перезавантажте сторінку."
+    "pl" -> "Aplikacja potrzebuje WebGL 2, a ta przeglądarka teraz go nie udostępnia. Włącz " +
+        "akcelerację sprzętową (lub WebGL) w ustawieniach przeglądarki i odśwież stronę."
+    else -> "This app needs WebGL 2, which this browser does not provide right now. Turn on hardware " +
+        "acceleration (or WebGL) in the browser settings and reload the page."
+}
 
 private fun showPlainMessage(text: String) {
     val message = document.createElement("p")
@@ -70,7 +80,7 @@ fun main() {
     }
 
     if (!webGl2Available()) {
-        showPlainMessage(WEBGL_UNAVAILABLE)
+        showPlainMessage(webGlUnavailableMessage())
         return
     }
 

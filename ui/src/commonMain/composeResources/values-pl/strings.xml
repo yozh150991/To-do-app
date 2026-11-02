@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="inbox_title">Skrzynka</string>
+    <string name="new_task_hint">Nowe zadanie</string>
+    <string name="add_task">Dodaj</string>
+    <string name="complete_task">Ukończ „%1$s”</string>
+    <string name="empty_inbox">Nie ma jeszcze zadań</string>
+    <string name="pending_sync">Czeka na synchronizację: %1$d</string>
+    <string name="database_unavailable">Nie udało się otworzyć bazy danych; dane nie zostały zmienione. %1$s</string>
+    <string name="error_blank_content">Zadanie musi mieć nazwę</string>
+    <string name="error_not_saved">Zmiana nie została zapisana: %1$s</string>
+</resources>
