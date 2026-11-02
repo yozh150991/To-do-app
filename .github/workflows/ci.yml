@@ -42,6 +42,15 @@ jobs:
             :desktopApp:jvmJar \
             2>&1 | tee build-log.txt
 
+      # Roborazzi screenshots of the shared UI (ui jvmTest), listed in the PR report.
+      - name: List UI screenshots
+        if: always()
+        run: |
+          mkdir -p ui/build/reports/runtime-evidence
+          { echo "Roborazzi (ui jvmTest, desktop renderer):"; ls -l ui/build/outputs/roborazzi 2>&1 | tail -n +2; } \
+            > ui/build/reports/runtime-evidence/roborazzi.txt
+          cat ui/build/reports/runtime-evidence/roborazzi.txt
+
       # The owner's release scripts end to end with a throwaway key: create-keystore.sh →
       # build-release.sh → signed, verified APK (docs/RELEASE.md). The Windows job runs the same.
       - name: Local release scripts with a throwaway key
@@ -64,6 +73,7 @@ jobs:
             **/build/reports/runtime-evidence/**
             **/build/test-results/**/*.xml
             core/database/schemas/**
+            ui/build/outputs/roborazzi/**
             dist/**
 
   windows-release:
@@ -243,6 +253,14 @@ jobs:
       - name: Start the local Supabase stack
         run: bash tools/ci/supabase-start.sh supabase-log.txt
 
+      # pgTAP database tests (supabase/tests/database) and a Toxiproxy smoke run against the
+      # same stack (spec §12.1). The Supabase CLI pins the Postgres image and with it pgTAP.
+      - name: pgTAP and Toxiproxy
+        env:
+          TOXIPROXY_VERSION: "2.13.0"
+        run: |
+          if ! bash tools/ci/qa-tools-smoke.sh; then echo 1 > qa-tools-result.txt; fi
+
       - name: Probe from the JVM, build the web app
         run: |
           set -a; . ./supabase.env; set +a
@@ -261,6 +279,10 @@ jobs:
           set -o pipefail
           if ! npx playwright test -g "supabase-kt" 2>&1 | tee -a ../../supabase-log.txt; then echo 1 > ../../supabase-result.txt; fi
 
+      - name: Combine results
+        if: always()
+        run: if [ -f qa-tools-result.txt ]; then echo 1 > supabase-result.txt; fi
+
       - name: Upload Supabase outputs
         if: always()
         uses: actions/upload-artifact@v4
@@ -276,6 +298,8 @@ jobs:
             webApp/build/reports/runtime-evidence/supabase-*.txt
             webApp/build/test-results/**
             build/wasm/yarn.lock
+            build/reports/runtime-evidence/**
+            qa-tools-result.txt
 
       - name: Fail if a Supabase check failed
         run: test "$(cat supabase-result.txt 2>/dev/null || echo 1)" = "0"
@@ -382,6 +406,16 @@ jobs:
       - name: Assemble app and test APKs
         run: ./gradlew --stacktrace :androidApp:assembleDebug :androidApp:assembleDebugAndroidTest
 
+      # Maestro CLI (spec §12.1), pinned; device-tests.sh runs androidApp/maestro after the
+      # instrumented tests.
+      - name: Install Maestro
+        env:
+          MAESTRO_VERSION: "2.12.1"
+        run: |
+          curl -fsSL -o maestro.zip "https://github.com/mobile-dev-inc/maestro/releases/download/cli-${MAESTRO_VERSION}/maestro.zip"
+          unzip -q maestro.zip -d "$HOME"
+          echo "$HOME/maestro/bin" >> "$GITHUB_PATH"
+
       # Own script instead of a packaged emulator action: every install/boot step lands in the
       # device log, which the PR report shows when a run fails.
       - name: Run instrumented tests on the emulator
@@ -403,6 +437,7 @@ jobs:
             androidApp/build/outputs/androidTest-results/**
             androidApp/build/reports/androidTests/**
             androidApp/build/reports/runtime-evidence/**
+            maestro-${{ matrix.api }}/**
 
       - name: Fail if instrumented tests failed
         run: test "$(cat device-${{ matrix.api }}-result.txt 2>/dev/null || echo 1)" = "0"

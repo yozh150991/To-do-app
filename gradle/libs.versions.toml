@@ -28,8 +28,13 @@ androidx-test-runner = "1.7.0"
 androidx-test-ext-junit = "1.3.0"
 
 junit4 = "4.13.2"
+# QA tools (spec §12.1), pinned 2026-11-03 from the dependency probe. CLI tools outside Gradle
+# (Maestro, Toxiproxy, Supabase CLI with pgTAP) are pinned in .github/workflows/ci.yml.
 turbine = "1.2.1"
 kotest = "6.2.6"
+roborazzi = "1.77.0"
+# Android local (JVM) UI tests from Ф1a.
+robolectric = "4.17"
 
 android-compileSdk = "37"
 android-targetSdk = "37"
@@ -73,6 +78,10 @@ androidx-test-ext-junit = { module = "androidx.test.ext:junit", version.ref = "a
 junit4 = { module = "junit:junit", version.ref = "junit4" }
 turbine = { module = "app.cash.turbine:turbine", version.ref = "turbine" }
 kotest-property = { module = "io.kotest:kotest-property", version.ref = "kotest" }
+compose-ui-test = { module = "org.jetbrains.compose.ui:ui-test", version.ref = "compose-multiplatform" }
+roborazzi-compose-desktop = { module = "io.github.takahirom.roborazzi:roborazzi-compose-desktop", version.ref = "roborazzi" }
+roborazzi-compose = { module = "io.github.takahirom.roborazzi:roborazzi-compose", version.ref = "roborazzi" }
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }

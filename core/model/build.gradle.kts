@@ -36,5 +36,10 @@ kotlin {
         commonTest.dependencies {
             implementation(kotlin("test"))
         }
+        jvmTest.dependencies {
+            // Property-based tests (spec §12.1); JVM only for now, the CI runs jvmTest.
+            implementation(libs.kotest.property)
+            implementation(libs.kotlinx.coroutines.core)
+        }
     }
 }

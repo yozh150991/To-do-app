@@ -58,6 +58,23 @@
 
 **Примітка про емулятор API 37.** Пакети системних образів Android 17 мають мінорний рівень у назві (`system-images;android-37.0;…`). Повний образ `google_apis` не дійшов до `boot_completed` на GitHub-hosted runner, тому для API 37 використовується ATD-образ (`google_atd`), призначений для автоматизованих тестів. Для тестів шару даних різниці немає; UI-тести на повному образі — окрема перевірка пізніше.
 
+## QA-інструменти (spec §12.1)
+
+Версії зафіксовано 03.11.2026 за звітом dependency probe (найновіші стабільні на цю дату). Кожен інструмент має smoke-запуск у CI, щоб версія була перевірена, а не лише записана.
+
+| Інструмент | Версія | Де закріплено | Smoke-перевірка в CI | Повне використання |
+| --- | --- | --- | --- | --- |
+| Kotest property | 6.2.6 | `libs.versions.toml` | `OrderKeysPropertyTest` (core/model, 300 випадкових послідовностей вставок) | Ф1a–Ф5b: послідовності команд, sync |
+| Turbine | 1.2.1 | `libs.versions.toml` | `TaskRepositoryTest` (Flow Inbox) | усі фази |
+| Roborazzi | 1.77.0 | `libs.versions.toml` | `ScreenshotTest` (ui, desktop-рендер): Inbox en/uk/pl, «Про застосунок» uk; поки запис, без baseline | Ф1a: baseline і `verify` для екранів, обрізані uk/pl рядки |
+| Compose UI test | 1.12.2 (= Compose MP) | `libs.versions.toml` | той самий `ScreenshotTest` | Ф1a |
+| Robolectric | 4.17 | `libs.versions.toml` | — (лише закріплено) | Ф1a: локальні Android UI-тести |
+| Maestro CLI | 2.12.1 | `ci.yml` (job емулятора) | `androidApp/maestro/about.yaml` на API 26 і 37: старт, «About», факти бази | Ф1a: сценарії dogfooding |
+| pgTAP | з образу Postgres Supabase CLI 2.122.0 (версію пише тест) | `ci.yml` (`SUPABASE_CLI`) | `supabase/tests/database/f0_probe.test.sql`: таблиця, RLS, політика, права на RPC | Ф5a: RLS, RPC, міграції |
+| Toxiproxy | 2.13.0 | `ci.yml` (`TOXIPROXY_VERSION`) | проксі перед локальним Supabase API, latency 400 мс | Ф5a–Ф5b: обриви й затримки в sync |
+
+Supabase CLI 3.0.0 вийшов 02.11.2026; CI лишається на 2.122.0 до окремої перевірки (мажорна версія).
+
 ## Висновки на зараз
 
 - **Android:** шар даних пройшов runtime-перевірку на мінімальному (API 26) і актуальному (API 37) Android: CRUD і збереження після перезапуску, атомарність entity + activity + outbox, безперервний `local_seq` при 50 паралельних записах, безпечне оновлення схеми з відкатом. Не перевірено на реальному телефоні.

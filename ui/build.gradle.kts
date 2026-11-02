@@ -41,6 +41,14 @@ kotlin {
         commonTest.dependencies {
             implementation(kotlin("test"))
         }
+        jvmTest.dependencies {
+            // Screenshot tests of the shared UI on the desktop renderer (spec §12.1: Roborazzi).
+            implementation(compose.desktop.currentOs)
+            implementation(libs.compose.ui.test)
+            implementation(libs.roborazzi.compose.desktop)
+            // viewModelScope needs Dispatchers.Main, which on the JVM comes from Swing.
+            implementation(libs.kotlinx.coroutines.swing)
+        }
     }
 }
 
@@ -48,4 +56,10 @@ kotlin {
 compose.resources {
     publicResClass = false
     packageOfResClass = "io.github.yozh150991.todo.ui.resources"
+}
+
+// Roborazzi writes screenshots only in record mode; CI keeps them as evidence (no baseline yet).
+tasks.withType<Test>().configureEach {
+    systemProperty("roborazzi.test.record", "true")
+    systemProperty("roborazzi.output.dir", layout.buildDirectory.dir("outputs/roborazzi").get().asFile.absolutePath)
 }
