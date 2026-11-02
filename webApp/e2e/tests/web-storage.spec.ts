@@ -148,6 +148,23 @@ test('tasks persist in OPFS across reload and a new tab', async ({ page, context
   }
 });
 
+test('time zones and DST: golden fixtures TIME-01..04, TIME-08', async ({ page, browserName }) => {
+  // Pure computation, no OPFS: runs in every browser, WebKit's ephemeral context included.
+  const lines: string[] = [`browser: ${browserName}`];
+  const log: string[] = [];
+  const errors: string[] = [];
+  await recordPage(page, log, errors);
+  try {
+    lines.push(`browser zone: ${await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)}`);
+    const time = await selfTest(page, 'selftest=time');
+    lines.push(`status: ${time.status}`, ...((time.json.results as string[] | undefined) ?? [String(time.json.error)]));
+    expect(time.status, JSON.stringify(time.json)).toBe('pass');
+  } finally {
+    lines.push(...pageLog(log));
+    evidence(`time-${browserName}.txt`, lines);
+  }
+});
+
 test('tasks persist after the browser is restarted', async ({ playwright, browserName }, testInfo) => {
   // A persistent profile on disk, closed and launched again: what a real browser restart does.
   // Also shows whether WebKit offers OPFS outside Playwright's ephemeral contexts.

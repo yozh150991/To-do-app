@@ -8,6 +8,7 @@ import io.github.yozh150991.todo.core.database.createWebAppDatabase
 import io.github.yozh150991.todo.core.domain.TaskRepository
 import io.github.yozh150991.todo.core.model.IdGenerator
 import io.github.yozh150991.todo.core.testing.SchemaV1Fixture
+import io.github.yozh150991.todo.core.testing.TimeGoldenFixtures
 import io.github.yozh150991.todo.core.testing.V1Database
 import kotlinx.browser.document
 import kotlinx.coroutines.MainScope
@@ -33,6 +34,7 @@ import kotlin.js.Promise
  *   index.html?selftest=clear                 → deletes the database pool from OPFS, as clearing
  *                                               site data does; the next start must be clean
  *   index.html?selftest=migrate               → a genuine schema v1 file, opened by the v2 AppDatabase
+ *   index.html?selftest=time                  → golden time fixtures TIME-01..04, TIME-08 (no database)
  *
  * The result is written as JSON into <pre id="selftest" data-status="pass|fail">.
  * write/verify use a separate database file, away from the app's own todo.db.
@@ -99,6 +101,14 @@ private fun removeDatabasePool(): Promise<JsAny?> =
 
 private suspend fun runSelfTest(phase: String, expectedWorkspace: String?): JsonObject = buildJsonObject {
     val checks = Checks()
+    if (phase == "time") {
+        // Same fixtures as on the JVM and Android; IANA rules come from @js-joda/timezone (core/model).
+        val results = TimeGoldenFixtures.runAll()
+        put("phase", phase)
+        putJsonArray("results") { results.forEach { add(JsonPrimitive(it.toString())) } }
+        put("status", if (results.all { it.passed }) "pass" else "fail")
+        return@buildJsonObject
+    }
     if (phase == "migrate") {
         put("phase", phase)
         migratePhase(checks)
