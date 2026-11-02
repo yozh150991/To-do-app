@@ -8,8 +8,14 @@ import * as path from 'node:path';
 
 const evidenceDir = process.env.EVIDENCE_DIR ?? '../build/reports/runtime-evidence';
 
-// Console noise that says nothing about the app: Skiko probes the GPU name, WebKit/Firefox refuse.
-const BENIGN_CONSOLE = [/WEBGL_debug_renderer_info not enabled/];
+// Console noise that says nothing about the app:
+// - Skiko probes the GPU name, WebKit/Firefox refuse;
+// - Compose resources 1.12.2 reads resource bytes through `wasmExports.memory`, which the Kotlin 2.4
+//   runtime reports as deprecated at console.error level (strings still load). Recheck on CMP updates.
+const BENIGN_CONSOLE = [
+  /WEBGL_debug_renderer_info not enabled/,
+  /Accessing `memory` via `wasmExports` is deprecated/,
+];
 
 // Typed into the real UI, then read back from todo.db by ?selftest=inspect.
 const UI_TASK = 'Typed in the web UI';
@@ -189,6 +195,13 @@ test('app UI starts, renders and saves a typed task', async ({ page, browserName
   const errors: string[] = [];
   const lines: string[] = [`browser: ${browserName}`];
   await recordPage(page, log, errors);
+  // Localized strings come from composeResources/*.cvr files next to the page.
+  const resources: string[] = [];
+  page.on('response', (response) => {
+    if (response.url().includes('composeResources')) {
+      resources.push(`${response.status()} ${new URL(response.url()).pathname}`);
+    }
+  });
 
   try {
     // Compose for Web draws through WebGL 2 (Skiko); headless browsers without a GPU may lack it.
@@ -208,6 +221,9 @@ test('app UI starts, renders and saves a typed task', async ({ page, browserName
     fs.mkdirSync(evidenceDir, { recursive: true });
     await page.screenshot({ path: path.join(evidenceDir, `ui-${browserName}.png`) });
     lines.push(`errors after start: ${JSON.stringify(errors)}`);
+    lines.push('compose resources:', ...resources.map((line) => `  ${line}`));
+    expect(resources.length, 'no composeResources requests').toBeGreaterThan(0);
+    expect(resources.filter((line) => !line.startsWith('200')), 'failed composeResources requests').toEqual([]);
 
     // The new-task field sits under the 64dp top bar, 16dp from the left edge (InboxScreen).
     await page.mouse.click(200, 92);
