@@ -135,6 +135,7 @@ jobs:
           fi
           tail -n 40 web-log.txt
           ls -la webApp/build/dist/wasmJs/productionExecutable 2>&1 | tee -a web-log.txt || true
+          bash tools/ci/web-bundle-check.sh
 
       # Plain static server without COOP/COEP headers (ADR-004); Chromium and Firefox are required.
       - name: Browser tests
@@ -217,6 +218,7 @@ jobs:
           set -a; . ../../supabase.env; set +a
           npm ci
           npx playwright install --with-deps chromium firefox webkit > ../../playwright-install.txt 2>&1
+          set -o pipefail
           if ! npx playwright test -g "supabase-kt" 2>&1 | tee -a ../../supabase-log.txt; then echo 1 > ../../supabase-result.txt; fi
 
       - name: Upload Supabase outputs
