@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Default (English) strings. Every key must also exist in values-uk and values-pl (StringResourcesTest). -->
+<resources>
+    <string name="inbox_title">Inbox</string>
+    <string name="new_task_hint">New task</string>
+    <string name="add_task">Add</string>
+    <string name="complete_task">Complete “%1$s”</string>
+    <string name="empty_inbox">No tasks yet</string>
+    <string name="pending_sync">Waiting to sync: %1$d</string>
+    <string name="database_unavailable">The database could not be opened; your data was not changed. %1$s</string>
+    <string name="error_blank_content">A task needs a name</string>
+    <string name="error_not_saved">The change was not saved: %1$s</string>
+</resources>

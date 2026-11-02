@@ -16,7 +16,8 @@ class TaskRulesTest {
     @Test
     fun blankContentIsRejected() {
         assertFailsWith<ValidationException> { TaskRules.normalizeContent("   \t\n") }
-        assertFailsWith<ValidationException> { TaskRules.normalizeContent("") }
+        val blank = assertFailsWith<ValidationException> { TaskRules.normalizeContent("") }
+        assertEquals(ValidationCode.BLANK_CONTENT, blank.code)
     }
 
     @Test

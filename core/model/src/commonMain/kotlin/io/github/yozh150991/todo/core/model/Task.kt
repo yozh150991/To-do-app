@@ -97,13 +97,19 @@ data class Project(
     val deletedAt: Instant? = null,
 )
 
-class ValidationException(message: String) : IllegalArgumentException(message)
+/** Why input was rejected. The UI turns the code into a localized message; the text is for logs. */
+enum class ValidationCode { BLANK_CONTENT, OTHER }
+
+class ValidationException(
+    message: String,
+    val code: ValidationCode = ValidationCode.OTHER,
+) : IllegalArgumentException(message)
 
 object TaskRules {
     /** spec §4.1: content is mandatory after trim. */
     fun normalizeContent(raw: String): String {
         val trimmed = raw.trim()
-        if (trimmed.isEmpty()) throw ValidationException("Task content must not be blank")
+        if (trimmed.isEmpty()) throw ValidationException("Task content must not be blank", ValidationCode.BLANK_CONTENT)
         return trimmed
     }
 }

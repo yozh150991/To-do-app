@@ -37,6 +37,7 @@ jobs:
             :core:database:jvmTest \
             :core:domain:jvmTest \
             :core:testing:jvmTest \
+            :ui:jvmTest \
             :androidApp:assembleDebug \
             :desktopApp:jvmJar \
             2>&1 | tee build-log.txt

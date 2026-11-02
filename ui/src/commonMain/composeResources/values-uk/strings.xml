@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="inbox_title">Вхідні</string>
+    <string name="new_task_hint">Нова задача</string>
+    <string name="add_task">Додати</string>
+    <string name="complete_task">Виконати «%1$s»</string>
+    <string name="empty_inbox">Задач поки немає</string>
+    <string name="pending_sync">Очікують синхронізації: %1$d</string>
+    <string name="database_unavailable">Базу даних не вдалося відкрити, дані не змінено. %1$s</string>
+    <string name="error_blank_content">Задачі потрібна назва</string>
+    <string name="error_not_saved">Зміну не збережено: %1$s</string>
+</resources>
