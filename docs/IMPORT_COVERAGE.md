@@ -75,7 +75,7 @@ Spec §9.1 вимагає перевірити схему, поля й лімі�
 | --- | --- | --- |
 | `projects` | `id`, `name`, `description`, `color` (назва кольору Todoist), `parent_id`, `child_order`, `inbox_project`, `is_favorite`, `is_archived`, `view_style`, `is_shared`, `is_collapsed` | Проєкт Inbox Todoist → наш системний Inbox (його `ExternalIdentity` вказує на локальний `inbox_id`); `color` → найближчий колір нашої палітри, сира назва — у звіт; `is_shared` / проєкти робочих просторів — `unsupported` (кількість); `view_style` — метадані до Ф6b |
 | `sections` | `id`, `project_id`, `name`, `description`, `section_order`, `is_archived`, `is_collapsed` | `imported` (екран секцій — Ф1b) |
-| `labels` | `id`, `name`, `color`, `item_order`, `is_favorite` (особисті мітки) | `imported`; спільні мітки (`labels/shared`) мають лише назву — `partial` |
+| `labels` | `id`, `name`, `color`, `order`, `is_favorite` (особисті мітки) | `imported`; спільні мітки (`labels/shared`) мають лише назву — `partial` |
 | `notes`, `project_notes` | Коментарі | `metadata_only`: кількість у звіт (коментарі — Ф6c) |
 | `reminders` | Нагадування Todoist | `metadata_only`: кількість за типами (наше авто-нагадування Ф1a створюється з `due_time`, повні — Ф3) |
 | `filters` | Збережені фільтри | `metadata_only`: кількість (raw — Ф5.1, активація — Ф6a) |
