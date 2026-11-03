@@ -52,7 +52,7 @@
 
 Налаштування (авто-нагадування, зсув) — не в Room, а через спільний інтерфейс `SettingsStore` з адаптерами: DataStore (Android), файл властивостей (Desktop), `localStorage` (Web) — spec §3.
 
-Індекси: `task(due_date)`, `task(deadline)`, `task(completed_at, deleted_at)` для «Сьогодні»/«Майбутніх»; `reminder(task_id)`. Міграція — Room 2 → 3 через `openAppDatabase` зі snapshot (FIX-01): нові таблиці, індекси й колонка `duration_days`; CHECK на наявній таблиці SQLite додати не дає без перебудови, тож або перебудова `task` у ручній міграції з тестом, або перевірка в домені — рішення в PR 2.
+Індекси: `task(due_date)`, `task(deadline)`, `task(completed_at, deleted_at)` для «Сьогодні»/«Майбутніх»; `reminder(task_id)`. Міграція — Room 2 → 3 через `openAppDatabase` зі snapshot (FIX-01): нові таблиці, індекси й колонка `duration_days`. Room не описує CHECK в entity, тож обмеження «не разом із `duration_min`» — або в ручному кроці міграції (`ADD COLUMN … CHECK`, SQLite перевіряє наявні рядки), або в домені й тестах — рішення в PR 2.
 
 ## 5. Контракти операцій
 
