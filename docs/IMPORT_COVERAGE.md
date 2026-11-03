@@ -60,7 +60,7 @@ Spec §9.1 вимагає перевірити схему, поля й лімі�
 | `due.datetime` без `Z` / з `Z` і `due.timezone` | Плаваючий час → `due_time`, `due_tz = null`; фіксований → `due_time` у зоні `due.timezone`, `due_tz = timezone` (spec §4.0.1) | `imported`; golden-перевірка з кейсами DST |
 | `due.is_recurring`, `due.string`, `due.lang` | Повторювана → увесь підграф у `deferred_todoist_node` (§9.0) | `deferred` → Ф2 `--recurring-only` |
 | `deadline.date` (`deadline.lang`) | `task.deadline` | `imported` |
-| `duration.amount` + `unit` (`minute` / `day`) | `duration_min`: хвилини як є | `imported` для `minute`; для `day` — `partial`: сирі значення в звіт, бо в нас немає багатоденної тривалості |
+| `duration.amount` + `unit` (`minute` / `day`) | `minute` → `duration_min`, `day` → `duration_days` (ADR-005) | `imported` |
 | `labels` (масив **назв**) | `task_label` через мітки з `labels` | `imported` для особистих міток; назва, якої немає серед особистих (спільна мітка), — `partial` у звіт: дедуплікація за назвою заборонена (§9.0) |
 | `added_at` | `task.created_at` | `imported` |
 | `updated_at` | Вхід `source_hash` / `last_seen_at` | метадані |
@@ -73,15 +73,19 @@ Spec §9.1 вимагає перевірити схему, поля й лімі�
 
 | Сутність | Поля Todoist | Мапінг і статус Ф1a |
 | --- | --- | --- |
-| `projects` | `id`, `name`, `description`, `color` (назва кольору Todoist), `parent_id`, `child_order`, `inbox_project`, `is_favorite`, `is_archived`, `view_style`, `is_shared`, `is_collapsed` | Проєкт Inbox Todoist → наш системний Inbox (його `ExternalIdentity` вказує на локальний `inbox_id`); `color` → найближчий колір нашої палітри, сира назва — у звіт; `is_shared` / проєкти робочих просторів — `unsupported` (кількість); `view_style` — метадані до Ф6b |
+| `projects` | `id`, `name`, `description`, `color` (назва кольору Todoist), `parent_id`, `child_order`, `inbox_project`, `is_favorite`, `is_archived`, `view_style`, `is_shared`, `is_collapsed` | Проєкт Inbox Todoist → наш системний Inbox (його `ExternalIdentity` вказує на локальний `inbox_id`); архівні (`is_archived`) імпортуються як архівні разом із задачами (рішення власника 03.11.2026; список — `GET /api/v1/projects/archived`, бо sync повертає активні); `color` → найближчий колір нашої палітри, сира назва — у звіт; `is_shared` / проєкти робочих просторів — `unsupported` (кількість); `view_style` — метадані до Ф6b |
 | `sections` | `id`, `project_id`, `name`, `description`, `section_order`, `is_archived`, `is_collapsed` | `imported` (екран секцій — Ф1b) |
 | `labels` | `id`, `name`, `color`, `order`, `is_favorite` (особисті мітки) | `imported`; спільні мітки (`labels/shared`) мають лише назву — `partial` |
 | `notes`, `project_notes` | Коментарі | `metadata_only`: кількість у звіт (коментарі — Ф6c) |
 | `reminders` | Нагадування Todoist | `metadata_only`: кількість за типами (наше авто-нагадування Ф1a створюється з `due_time`, повні — Ф3) |
 | `filters` | Збережені фільтри | `metadata_only`: кількість (raw — Ф5.1, активація — Ф6a) |
 
-### Питання до реалізації PR 9
+### Рішення власника (3 листопада 2026 року)
 
-1. **Архівні проєкти** (`is_archived`): імпортувати як архівні з їхніми задачами чи лише лічити? Spec говорить про «активні» сутності; рішення — під час PR 9, з лічильником у звіті в будь-якому разі.
-2. **Тривалість у днях** (`unit = day`): чи потрібна в нас багатоденна тривалість, чи досить звіту.
-3. **Ліміти запитів:** звірити числа з розділом «Request Limits» документації на першому запуску.
+1. **Архівні проєкти** імпортуються як архівні разом із їхніми задачами; звіт показує, скільки їх.
+2. **Тривалість у днях** зберігається в новому полі `duration_days` — ADR-005.
+
+### Що звірити на першому запуску PR 9
+
+- Числа лімітів запитів у розділі «Request Limits» документації.
+- Чи повертає `sync` архівні проєкти, чи лише `GET /api/v1/projects/archived` (SDK має окремий метод).
