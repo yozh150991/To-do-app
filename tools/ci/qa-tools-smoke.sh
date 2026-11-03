@@ -15,7 +15,9 @@ STATUS=0
 # --- pgTAP ------------------------------------------------------------------------------------
 if supabase test db > pgtap-log.txt 2>&1; then PGTAP=pass; else PGTAP=fail; STATUS=1; fi
 evidence "pgTAP via supabase test db (CLI $(supabase --version 2>/dev/null)): $PGTAP"
-sed 's/^/  /' pgtap-log.txt | tail -n 20 >> "$EVIDENCE"
+# Docker pull progress and CLI update notices say nothing about the tests.
+grep -Ev ': (Pulling fs layer|Waiting|Verifying Checksum|Download complete|Pull complete)$|^(Digest|Status): |^public\.ecr\.aws/|new version of Supabase CLI|recommend updating' pgtap-log.txt \
+  | sed 's/^/  /' | tail -n 20 >> "$EVIDENCE"
 
 # --- Toxiproxy --------------------------------------------------------------------------------
 set -a; . ./supabase.env; set +a

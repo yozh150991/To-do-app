@@ -415,6 +415,8 @@ jobs:
           curl -fsSL -o maestro.zip "https://github.com/mobile-dev-inc/maestro/releases/download/cli-${MAESTRO_VERSION}/maestro.zip"
           unzip -q maestro.zip -d "$HOME"
           echo "$HOME/maestro/bin" >> "$GITHUB_PATH"
+          # No usage analytics from CI runs.
+          echo "MAESTRO_CLI_NO_ANALYTICS=1" >> "$GITHUB_ENV"
 
       # Own script instead of a packaged emulator action: every install/boot step lands in the
       # device log, which the PR report shows when a run fails.

@@ -60,7 +60,7 @@
 
 ## QA-інструменти (spec §12.1)
 
-Версії зафіксовано 03.11.2026 за звітом dependency probe (найновіші стабільні на цю дату). Кожен інструмент має smoke-запуск у CI, щоб версія була перевірена, а не лише записана.
+Версії зафіксовано 03.11.2026 за звітом dependency probe (найновіші стабільні на цю дату). Кожен інструмент, крім Robolectric, має smoke-запуск у CI, щоб версія була перевірена, а не лише записана; перший запуск 03.11.2026 — усі `pass` (Maestro: 13 с на API 26, 9 с на API 37; Toxiproxy: 0,41 с із затримкою 400 мс проти 0,03 с напряму).
 
 | Інструмент | Версія | Де закріплено | Smoke-перевірка в CI | Повне використання |
 | --- | --- | --- | --- | --- |
@@ -70,7 +70,7 @@
 | Compose UI test | 1.12.2 (= Compose MP) | `libs.versions.toml` | той самий `ScreenshotTest` | Ф1a |
 | Robolectric | 4.17 | `libs.versions.toml` | — (лише закріплено) | Ф1a: локальні Android UI-тести |
 | Maestro CLI | 2.12.1 | `ci.yml` (job емулятора) | `androidApp/maestro/about.yaml` на API 26 і 37: старт, «About», факти бази | Ф1a: сценарії dogfooding |
-| pgTAP | з образу Postgres Supabase CLI 2.122.0 (версію пише тест) | `ci.yml` (`SUPABASE_CLI`) | `supabase/tests/database/f0_probe.test.sql`: таблиця, RLS, політика, права на RPC | Ф5a: RLS, RPC, міграції |
+| pgTAP | 1.3 (Postgres 17.11 з образу Supabase CLI 2.122.0) | `ci.yml` (`SUPABASE_CLI`) | `supabase/tests/database/f0_probe.test.sql`: таблиця, RLS, політика, права на RPC | Ф5a: RLS, RPC, міграції |
 | Toxiproxy | 2.13.0 | `ci.yml` (`TOXIPROXY_VERSION`) | проксі перед локальним Supabase API, latency 400 мс | Ф5a–Ф5b: обриви й затримки в sync |
 
 Supabase CLI 3.0.0 вийшов 02.11.2026; CI лишається на 2.122.0 до окремої перевірки (мажорна версія).
