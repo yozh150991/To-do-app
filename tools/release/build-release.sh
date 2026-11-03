@@ -33,13 +33,30 @@ TEST_MODE="${TODO_RELEASE_TEST:-0}"
 ALIAS="${TODO_RELEASE_KEY_ALIAS:-todo-release}"
 PINNED_FILE=".github/release-signing-cert.sha256"
 
+FAIL_REASON=""
+# Everything the script prints also goes to this file (dist/ is git-ignored): a double-clicked
+# window may not show the earlier output, and the file can be sent as is.
+SESSION_LOG="dist/build-release-last.log"
+mkdir -p dist
+: > "$SESSION_LOG"
+exec > >(tee -a "$SESSION_LOG") 2>&1
+
 finish() {
   local status=$?
   echo
   if [ "$status" -eq 0 ]; then
     echo "Готово."
+  elif [ "$status" -eq 2 ]; then
+    echo "Локальну копію оновлено до актуального main. Запусти скрипт ще раз — уже з новою версією коду."
   else
-    echo "Збірку зупинено (код $status). Нічого не встановлено й не опубліковано — див. повідомлення вище."
+    echo "Збірку зупинено (код $status). Нічого не встановлено й не опубліковано."
+    # Repeated here: the window may not show the earlier output (long Gradle logs, a cleared screen).
+    if [ -n "$FAIL_REASON" ]; then
+      echo "Причина: $FAIL_REASON"
+    else
+      echo "Причина — у повідомленнях вище."
+    fi
+    echo "Усе, що виводив скрипт: $(display_path "$REPO_ROOT/$SESSION_LOG")"
   fi
   if [ -t 0 ] && [ "$TEST_MODE" != 1 ]; then
     read -r -p "Натисни Enter, щоб закрити вікно..." _ || true
@@ -48,6 +65,7 @@ finish() {
 trap finish EXIT
 
 fail() {
+  FAIL_REASON="$*"
   echo
   echo "ПОМИЛКА: $*" >&2
   exit 1
@@ -66,6 +84,7 @@ sha256_of() {
 
 echo "== Збірка релізу To-do app"
 echo "Репозиторій: $(display_path "$REPO_ROOT")"
+echo "Лог: $(display_path "$REPO_ROOT/$SESSION_LOG")"
 echo
 
 # --- 1. git state and version ---------------------------------------------------------------------
@@ -73,17 +92,40 @@ HEAD_SHA=""
 EXISTING_TAG=0
 if [ "$TEST_MODE" != 1 ]; then
   command -v git >/dev/null 2>&1 || fail "git не знайдено. На Windows запускай скрипт у Git Bash."
+  # `bash` typed in PowerShell is often WSL's Linux shell: its git sees a Windows checkout under
+  # /mnt/<drive>/ with other line endings and file modes, so every file looks modified.
+  if grep -qi microsoft /proc/version 2>/dev/null && [[ "$REPO_ROOT" == /mnt/[a-z]/* ]]; then
+    fail "Скрипт запущено в Linux-оболонці WSL (так буває, якщо набрати bash у PowerShell) над папкою Windows.
+Тут інший git і немає Windows-версій JDK та Android SDK. Запусти скрипт у Git Bash:
+у папці репозиторію правий клік → Open Git Bash here → bash tools/release/build-release.sh 0.0.2
+(або подвійний клік на tools/release/build-release.sh)."
+  fi
   echo "Отримую останній стан з GitHub..."
   git fetch --quiet origin main || fail "Не вдалося отримати origin/main (перевір інтернет і вхід у GitHub)."
   git fetch --quiet --tags origin 2>/dev/null || true
   HEAD_SHA="$(git rev-parse HEAD)"
   MAIN_SHA="$(git rev-parse origin/main)"
-  if [ "$HEAD_SHA" != "$MAIN_SHA" ]; then
-    fail "Поточний коміт ${HEAD_SHA:0:7} ($(git rev-parse --abbrev-ref HEAD)) не збігається з origin/main ${MAIN_SHA:0:7}.
-Реліз збирається лише з main. Виконай: git checkout main && git pull"
-  fi
   if ! git diff --quiet || ! git diff --cached --quiet; then
-    fail "Є незакомічені зміни у файлах репозиторію (git status). Реліз має відповідати коду в main."
+    fail "Є незакомічені зміни у файлах репозиторію. Реліз має відповідати коду в main.
+Змінені файли (git status --short):
+$(git status --short --untracked-files=no | head -n 15)
+Якщо ці правки не потрібні, повернути файли до стану main: git checkout -- . (зміни буде втрачено)"
+  fi
+  if [ "$HEAD_SHA" != "$MAIN_SHA" ]; then
+    BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+    # The usual case after merges on GitHub: local main is simply behind origin/main.
+    if [ "$BRANCH" = main ] && git merge-base --is-ancestor "$HEAD_SHA" "$MAIN_SHA"; then
+      echo "Локальна копія відстає від GitHub: ${HEAD_SHA:0:7} → ${MAIN_SHA:0:7} ($(git rev-list --count "$HEAD_SHA..$MAIN_SHA") комітів)."
+      if ask_yes "Оновити її до origin/main зараз?"; then
+        git merge --ff-only --quiet origin/main || fail "Не вдалося оновити main до origin/main. Виконай вручну: git pull"
+        echo "Оновлено до ${MAIN_SHA:0:7}."
+        # This very file may have changed with the update: the new version runs from the start.
+        exit 2
+      fi
+      fail "Реліз збирається лише з актуального main. Оновити: git pull"
+    fi
+    fail "Поточний коміт ${HEAD_SHA:0:7} ($BRANCH) не збігається з origin/main ${MAIN_SHA:0:7}.
+Реліз збирається лише з main. Виконай: git checkout main && git pull"
   fi
 fi
 
