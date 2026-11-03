@@ -42,7 +42,7 @@
 
 ## 4. Схема v3 (чернетка)
 
-Поля задач для Ф1a вже є з v1 (`priority`, `due_date`, `due_time`, `due_tz`, `deadline`, `parent_id`, `completed_at`, `deleted_at`). Нове:
+Поля задач для Ф1a вже є з v1 (`priority`, `due_date`, `due_time`, `due_tz`, `deadline`, `parent_id`, `completed_at`, `deleted_at`). Нове в `task`: колонка `duration_days` (ADR-005, ціле ≥ 1, CHECK — не разом із `duration_min`). Нові таблиці:
 
 | Таблиця | Поля (spec §4.2) | Примітки |
 | --- | --- | --- |
@@ -52,7 +52,7 @@
 
 Налаштування (авто-нагадування, зсув) — не в Room, а через спільний інтерфейс `SettingsStore` з адаптерами: DataStore (Android), файл властивостей (Desktop), `localStorage` (Web) — spec §3.
 
-Індекси: `task(due_date)`, `task(deadline)`, `task(completed_at, deleted_at)` для «Сьогодні»/«Майбутніх»; `reminder(task_id)`. Міграція — Room AutoMigration 2 → 3 (лише нові таблиці й індекси) через `openAppDatabase` зі snapshot (FIX-01).
+Індекси: `task(due_date)`, `task(deadline)`, `task(completed_at, deleted_at)` для «Сьогодні»/«Майбутніх»; `reminder(task_id)`. Міграція — Room 2 → 3 через `openAppDatabase` зі snapshot (FIX-01): нові таблиці, індекси й колонка `duration_days`; CHECK на наявній таблиці SQLite додати не дає без перебудови, тож або перебудова `task` у ручній міграції з тестом, або перевірка в домені — рішення в PR 2.
 
 ## 5. Контракти операцій
 
@@ -60,7 +60,7 @@
 
 | Сутність | Операції Ф1a | `field_patch` |
 | --- | --- | --- |
-| `task` | `create`, `update`, `complete`, `uncomplete`, `delete`, `restore`, `move` | Лише змінені поля: `content`, `description`, `priority`, `due_date`, `due_time`, `due_tz`, `deadline`, `project_id`, `parent_id`, `child_order`. Перенесення чи видалення піддерева — окрема операція на кожну змінену задачу, усі в одній транзакції й одній групі Undo |
+| `task` | `create`, `update`, `complete`, `uncomplete`, `delete`, `restore`, `move` | Лише змінені поля: `content`, `description`, `priority`, `due_date`, `due_time`, `due_tz`, `deadline`, `duration_min`, `duration_days`, `project_id`, `parent_id`, `child_order`. Перенесення чи видалення піддерева — окрема операція на кожну змінену задачу, усі в одній транзакції й одній групі Undo |
 | `project` | `create`, `update`, `archive`, `unarchive`, `delete` | `name`, `color`, `parent_id`, `child_order`, `is_favorite`; `delete` несе вибір долі задач (перемістити в Inbox / видалити разом) |
 | `reminder` | `create`, `update`, `delete` | Повний запис при `create`, змінені поля при `update` |
 | імпорт / restore | без outbox на кожен рядок | Restore у порожнє сховище переносить outbox і `local_seq` з backup як є (§3.2: не генерувати тисячі дублів); `ExternalIdentity` зберігає `local_id` |
