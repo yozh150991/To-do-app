@@ -92,13 +92,24 @@ HEAD_SHA=""
 EXISTING_TAG=0
 if [ "$TEST_MODE" != 1 ]; then
   command -v git >/dev/null 2>&1 || fail "git не знайдено. На Windows запускай скрипт у Git Bash."
+  # `bash` typed in PowerShell is often WSL's Linux shell: its git sees a Windows checkout under
+  # /mnt/<drive>/ with other line endings and file modes, so every file looks modified.
+  if grep -qi microsoft /proc/version 2>/dev/null && [[ "$REPO_ROOT" == /mnt/[a-z]/* ]]; then
+    fail "Скрипт запущено в Linux-оболонці WSL (так буває, якщо набрати bash у PowerShell) над папкою Windows.
+Тут інший git і немає Windows-версій JDK та Android SDK. Запусти скрипт у Git Bash:
+у папці репозиторію правий клік → Open Git Bash here → bash tools/release/build-release.sh 0.0.2
+(або подвійний клік на tools/release/build-release.sh)."
+  fi
   echo "Отримую останній стан з GitHub..."
   git fetch --quiet origin main || fail "Не вдалося отримати origin/main (перевір інтернет і вхід у GitHub)."
   git fetch --quiet --tags origin 2>/dev/null || true
   HEAD_SHA="$(git rev-parse HEAD)"
   MAIN_SHA="$(git rev-parse origin/main)"
   if ! git diff --quiet || ! git diff --cached --quiet; then
-    fail "Є незакомічені зміни у файлах репозиторію (git status). Реліз має відповідати коду в main."
+    fail "Є незакомічені зміни у файлах репозиторію. Реліз має відповідати коду в main.
+Змінені файли (git status --short):
+$(git status --short --untracked-files=no | head -n 15)
+Якщо ці правки не потрібні, повернути файли до стану main: git checkout -- . (зміни буде втрачено)"
   fi
   if [ "$HEAD_SHA" != "$MAIN_SHA" ]; then
     BRANCH="$(git rev-parse --abbrev-ref HEAD)"
