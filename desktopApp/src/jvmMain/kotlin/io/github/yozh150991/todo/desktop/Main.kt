@@ -8,6 +8,7 @@ import io.github.yozh150991.todo.core.database.defaultDesktopDatabaseFile
 import io.github.yozh150991.todo.core.database.openAppDatabase
 import io.github.yozh150991.todo.core.domain.TaskRepository
 import io.github.yozh150991.todo.ui.App
+import io.github.yozh150991.todo.ui.FeatureFlags
 import io.github.yozh150991.todo.ui.about.AppInfo
 import io.github.yozh150991.todo.ui.uiModule
 import org.koin.core.context.startKoin
@@ -35,7 +36,7 @@ fun main() {
             },
             title = "To-do",
         ) {
-            App()
+            App(FeatureFlags.of(System.getProperty("todo.features") == "all"))
         }
     }
 }

@@ -14,6 +14,7 @@ import io.github.yozh150991.todo.ui.about.AboutDialog
 import io.github.yozh150991.todo.ui.about.AboutViewModel
 import io.github.yozh150991.todo.ui.inbox.InboxScreen
 import io.github.yozh150991.todo.ui.inbox.InboxViewModel
+import io.github.yozh150991.todo.ui.navigation.AppNavigation
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.module
@@ -47,11 +48,16 @@ fun AppTheme(content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = if (isSystemInDarkTheme()) DarkColors else LightColors, content = content)
 }
 
+/** The whole app; [features] come from the platform entry point (debug or release build). */
 @Composable
-fun App() {
+fun App(features: FeatureFlags = FeatureFlags.Release) {
     AppTheme {
         var aboutOpen by rememberSaveable { mutableStateOf(false) }
-        InboxScreen(viewModel = koinViewModel<InboxViewModel>(), onOpenAbout = { aboutOpen = true })
+        AppNavigation(
+            features = features,
+            onOpenAbout = { aboutOpen = true },
+            inbox = { InboxScreen(viewModel = koinViewModel<InboxViewModel>(), onOpenAbout = { aboutOpen = true }) },
+        )
         if (aboutOpen) AboutDialog(viewModel = koinViewModel<AboutViewModel>(), onDismiss = { aboutOpen = false })
     }
 }

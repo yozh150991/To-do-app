@@ -1,11 +1,12 @@
-# Android UI end to end with Maestro (spec §12.1): start the debug build, open "About" and check
-# that the database facts are read on the device. CI runs it on the emulators after the
-# instrumented tests (tools/ci/device-tests.sh); the emulators use English.
+# Android UI end to end with Maestro (spec §12.1): start the debug build, open "About" from the
+# Inbox top bar and check that the database facts are read on the device. CI runs the flows in
+# this folder on the emulators after the instrumented tests (tools/ci/device-tests.sh); the
+# emulators use English.
 appId: io.github.yozh150991.todo.debug
 ---
 - launchApp:
     clearState: true
-- assertVisible: "Inbox"
+- tapOn: "Inbox"
 - tapOn: "About"
 - assertVisible: "SQLite 3.*FTS5: yes"
 - assertVisible: "Database: schema v.*check ok"

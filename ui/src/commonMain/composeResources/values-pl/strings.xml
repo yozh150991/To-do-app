@@ -20,4 +20,10 @@
     <string name="yes">tak</string>
     <string name="no">nie</string>
     <string name="close">Zamknij</string>
+    <string name="tab_inbox">Skrzynka</string>
+    <string name="tab_today">Dziś</string>
+    <string name="tab_upcoming">Nadchodzące</string>
+    <string name="tab_browse">Przegląd</string>
+    <string name="today_placeholder">Tu pojawią się zaległe i dzisiejsze zadania.</string>
+    <string name="upcoming_placeholder">Tu pojawią się zadania na najbliższe dni.</string>
 </resources>

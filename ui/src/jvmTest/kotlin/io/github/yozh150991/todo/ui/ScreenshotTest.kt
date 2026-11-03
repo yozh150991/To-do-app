@@ -1,6 +1,13 @@
 package io.github.yozh150991.todo.ui
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.unit.dp
+import io.github.yozh150991.todo.ui.navigation.AppNavigation
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onAllNodesWithText
@@ -68,6 +75,32 @@ class ScreenshotTest {
     @Test fun inboxUkrainian() = inbox("uk")
 
     @Test fun inboxPolish() = inbox("pl")
+
+    /** Development build: the four tabs as a bottom bar (phone) and as a rail (tablet, desktop). */
+    private fun navigation(name: String, width: Int, height: Int) {
+        Locale.setDefault(Locale.forLanguageTag("uk"))
+        val repository = repository("navigation-$name")
+        val viewModel = InboxViewModel(repository)
+        runComposeUiTest {
+            setContent {
+                AppTheme {
+                    Box(Modifier.size(width.dp, height.dp).testTag("frame")) {
+                        AppNavigation(
+                            features = FeatureFlags.Development,
+                            onOpenAbout = {},
+                            inbox = { InboxScreen(viewModel = viewModel, onOpenAbout = {}) },
+                        )
+                    }
+                }
+            }
+            onNodeWithTag("screen-today").assertExists()
+            onNodeWithTag("frame").captureRoboImage(File(output, "navigation-$name-uk.png").path)
+        }
+    }
+
+    @Test fun navigationPhone() = navigation("phone", 390, 740)
+
+    @Test fun navigationTablet() = navigation("tablet", 900, 600)
 
     @Test
     fun aboutUkrainian() {

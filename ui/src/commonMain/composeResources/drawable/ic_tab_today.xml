@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Own icon (spec §1.3: no Todoist iconography). 24 × 24, tinted by the UI. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FF000000"
+        android:fillType="evenOdd"
+        android:pathData="M8,2v2h8V2h2v2h1a2,2 0,0 1,2 2v13a2,2 0,0 1,-2 2H5a2,2 0,0 1,-2 -2V6a2,2 0,0 1,2 -2h1V2z M5,9v10h14V9z M9,11h6v6H9z" />
+</vector>

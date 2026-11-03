@@ -1,0 +1,20 @@
+# Top-level navigation (docs/UX_SPEC.md §2.1) in a debug build, where feature flags show all four
+# tabs: the app starts on Today, Back from another tab returns to Today, Back on Today leaves the
+# app, and Browse opens "About".
+appId: io.github.yozh150991.todo.debug
+---
+- launchApp:
+    clearState: true
+- assertVisible: "Overdue tasks and tasks for today will appear here."
+- takeScreenshot: today
+- tapOn: "Upcoming"
+- assertVisible: "Tasks for the coming days will appear here."
+- back
+- assertVisible: "Overdue tasks and tasks for today will appear here."
+- tapOn: "Browse"
+- tapOn: "About"
+- assertVisible: "SQLite 3.*"
+- tapOn: "Close"
+- tapOn: "Today"
+- back
+- assertNotVisible: "Overdue tasks and tasks for today will appear here."
