@@ -49,6 +49,7 @@ kotlin {
             implementation(libs.roborazzi.compose.desktop)
             // viewModelScope needs Dispatchers.Main, which on the JVM comes from Swing.
             implementation(libs.kotlinx.coroutines.swing)
+            implementation(libs.kotlinx.coroutines.test)
         }
     }
 }
@@ -61,6 +62,11 @@ compose.resources {
 
 // Roborazzi writes screenshots only in record mode; CI keeps them as evidence (no baseline yet).
 tasks.withType<Test>().configureEach {
+    // Full exception messages in the CI log: the test reports are only in the artifacts.
+    testLogging {
+        events("failed")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+    }
     systemProperty("roborazzi.test.record", "true")
     systemProperty("roborazzi.output.dir", layout.buildDirectory.dir("outputs/roborazzi").get().asFile.absolutePath)
 }

@@ -13,13 +13,29 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import io.github.yozh150991.todo.ui.navigation.AppNavigation
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.setMain
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /** Top-level navigation of docs/UX_SPEC.md §2.1 and the feature flags that hide unfinished tabs. */
-@OptIn(ExperimentalTestApi::class)
+@OptIn(ExperimentalTestApi::class, ExperimentalCoroutinesApi::class)
 class NavigationTest {
     private val inbox = "inbox content"
+
+    // Navigation moves back stack entries through their lifecycle, which must happen on the "main"
+    // thread. In jvmTest that is Swing's EDT (kotlinx-coroutines-swing), while clicks and Back run
+    // on the test thread; an unconfined Main makes the test thread the main one.
+    @BeforeTest
+    fun useTestThreadAsMain() = Dispatchers.setMain(UnconfinedTestDispatcher())
+
+    @AfterTest
+    fun restoreMain() = Dispatchers.resetMain()
 
     @Test
     fun releaseBuildShowsOnlyInboxWithoutNavigationBar() = runComposeUiTest {
