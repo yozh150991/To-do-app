@@ -32,6 +32,11 @@ jobs:
             bash tools/deps/probe-versions.sh
           } > probe.md
           cat probe.md
+      - name: Probe GitHub Actions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo "### GitHub Actions"; echo; bash tools/deps/probe-actions.sh; } | tee -a probe.md
       - name: Post report
         env:
           GH_TOKEN: ${{ github.token }}
