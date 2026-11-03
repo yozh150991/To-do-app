@@ -1,6 +1,6 @@
 # Модель даних — локальна БД
 
-**Схема:** Room 3, версія **2** (Ф0). Нормативне джерело полів — spec v2.6.1 §4; тут — фактична реалізація й угоди зберігання.
+**Схема:** Room 3, версія **2** (Ф0). Перша частина — фактична реалізація й угоди зберігання; друга — нормативний текст специфікації v2.6.1 §4 (перенесено без змін, 3 листопада 2026 року, §13.4). Поведінка складних переходів (§4.3) — у [`docs/RECURRENCE_CONTRACT.md`](RECURRENCE_CONTRACT.md).
 Згенеровані схеми Room: `core/database/schemas/` (комітяться в репозиторій; CI показує незакомічену схему у звіті PR). Схема v1 заморожена й додатково збережена як DDL-фікстура `core/testing/.../SchemaV1Fixture.kt` для тестів міграції.
 
 ## Угоди зберігання
@@ -105,3 +105,110 @@
 - **Web (ADR-004):** `WebWorkerSQLiteDriver` і власний worker на SQLite WASM 3.54.1 з VFS `opfs-sahpool` (файли в Origin Private File System браузера), журнал `TRUNCATE`, одне з'єднання, одна вкладка. Схема, DAO і `TaskRepository` ті самі. Міграція v1 → v2 у браузері — та сама Room AutoMigration; захист snapshot (FIX-01) на Web — до релізу Web у Ф7, примітив `VACUUM INTO` у браузері вже перевірено.
 - `fallbackToDestructiveMigration` не використовується.
 - FTS5-токенайзер: **`unicode61 remove_diacritics 2`** (ADR-001 п. 5). Перевірено на JVM, Android API 26 і API 37, а також у браузерах (Chromium, Firefox, WebKit): точний збіг, регістр кирилиці, префіксний пошук і пошук польських слів без діакритики (`prad` → `prąd`). Сама FTS-таблиця для задач з'явиться у Ф6a.
+
+---
+
+Нижче — нормативний текст §4 специфікації v2.6.1 без змін. Заголовки мають знак «§»; зміни — лише через ADR + [`docs/SPEC_CHANGELOG.md`](SPEC_CHANGELOG.md). Якщо реалізація вище розходиться з цим текстом, це помилка реалізації або привід для ADR.
+
+## §4. Модель даних
+
+**ID:** UUID генерується клієнтом. Синхронізовані записи мають `id`, `user_id` на сервері, `created_at`, `updated_at`, `deleted_at`, `revision` (серверна версія); клієнтський timestamp не є авторитетом порядку конфліктних операцій. Локальна база має `account_scope`: до Ф5 це `local:<workspace_uuid>`, після контрольованого claim — ідентифікатор зв'язаного акаунта. `LocalWorkspace.workspace_id` і `ExternalIdentity` **не змінюються** від переходу на хмару; системний Inbox **один на власника**, при злитті зв'язки переназначаються транзакційно.
+
+**Часова модель:** `due_date` = `LocalDate`; `due_time` = `LocalTime` або null; `due_tz` = IANA timezone або null (floating local time). Абсолютні моменти (`completed_at`, `created_at`, `remind_at`) — UTC instant. Ніякої прихованої конвертації календарної дати у UTC-північ. Нижче — нормативний контракт (не TODO) для всіх платформ, імпортера, віджетів та сповіщень.
+
+### §4.0.1. Нормативний контракт часу й повторів (V25-TIME)
+
+1. **Типи:** `all_day` = дата без часу та без UTC instant; `fixed_zone` = локальна дата/час + IANA `due_tz`, яка переживає подорожі без зміщення місцевого часу в зоні задачі; `floating_local` = дата/час без `due_tz` (виконується о вказаному настінному часі кожного пристрою, instant нагадування може різнитися між пристроями). Зміна timezone пристрою **не переписує** збережену `LocalDate`/`LocalTime`; для floating перескладає локальні аларми.
+2. **Канонічний якір:** кожна задача з повтором має `recurrence_dtstart_date` та `recurrence_dtstart_time?` (доменний DTSTART), `recurrence_zone_mode = all_day | fixed_zone | floating_local`, `recurrence_zone_id?` (лише fixed zone), `recurrence_policy_version` і `recurrence_end_reason?`. Це **конфігурація серії**, не дубль активної `TaskOccurrence`: occurrence + похідний кеш Task.due лишаються джерелом поточної наступної дати. Створення без початкової дати обирає **першу допустиму локальну календарну дату >= локального сьогодні на пристрої створення**, а для заданого часу на сьогодні, що вже минув, — наступну допустиму; цю дату записують як DTSTART та синхронізують. Для `fixed_zone` «сьогодні» обчислюється у заданій IANA-зоні, для floating — у зоні пристрою створення. При явному `починаючи з` використовуємо саме вказану дату, навіть якщо вона в минулому; UI попереджає про overdue.
+3. **`COUNT` і `UNTIL`:** `DTSTART` є кандидатом №1 лише якщо він відповідає шаблону. `COUNT` рахує **допустимі** появи з початку серії (включно з уже завершеними/пропущеними), а не кількість виконань. `UNTIL` у UI — включна календарна дата в календарі серії; реалізація зберігає канонічний `until_local_date`, а при серіалізації в RFC 5545 використовує тип і UTC-конверсію `UNTIL` відповідно до типу DTSTART. Не плутати граничну локальну дату користувача з UTC-кінцем дня. `COUNT` + `UNTIL` одночасно заборонені в UI v1, імпорт такої комбінації → `needs_review`. Для `completion_interval` `COUNT` позначає кількість **створених появ** (включно зі skipped), а `UNTIL` обмежує їхню target civil date включно; date-last completion і skipped завершують серію за звичайним state machine.
+4. **DST:** для **генерованих RRULE появ** неіснуючий локальний час у DST gap **зсувається вперед на довжину розриву** (02:30 → 03:30 за новим офсетом, тобто той самий instant, що й 02:30 за офсетом до розриву) і **рахується в COUNT**. RFC 5545 §3.3.10 тут суперечить сам собі: в одному місці такі появи ігноруються, в іншому трактуються як явний DATE-TIME за §3.3.5; обрано варіант, за якого задача не зникає і який збігається зі стандартною поведінкою java.time. Однакову поведінку інших iCalendar-клієнтів при експорті не гарантуємо; для дубльованого часу в DST overlap обираємо **перший** із двох offset (раніший instant). Для **одноразового явно заданого** неіснуючого часу повертаємо validation error з вибором користувача, а не переносимо на годину мовчки. Час нагадування визначається за тим самим resolver; якщо відповідного валідного instant немає, показуємо зрозумілу причину і не створюємо неправдивий alarm. Переведення зони/правил ОС не може змінювати самі збережені civil date/time.
+5. **Після виконання:** `fixed_schedule` (`DAILY/WEEKLY/MONTHLY/YEARLY`, BYxxx) рахує наступну **допустиму заплановану** появу після `max(completion_local_datetime, current_effective_due)`, не змінюючи DTSTART та не створюючи історичних completion за автоматично пропущені дати; кількість пропущених календарних кандидатів журналюється лише як `auto_advanced_count` в activity. Для `skip_to_next` так само беремо наступну допустиму появу **строго після max(now, effective_due)**, без `TaskCompletion`. `reschedule_current` зберігає одиничний override і не зсуває глобальний fixed anchor. `edit_recurrence_rule` змінює весь шаблон і встановлює новий версійний anchor із preview.
+6. **Completion-based** (`recur_from_completion=true`) є **окремим доменним режимом** `completion_interval` для `N` календарних днів/тижнів/місяців/років, а не сирим RFC 5545 RRULE: після успішного completion беремо `completed_at` (UTC) і `completion_zone_id` (IANA-зону, зафіксовану в операції), переводимо у local date, додаємо N календарних одиниць та використовуємо **початковий запланований час** серії. Якщо в target month немає відповідного дня — переміщаємо на останній день того місяця **тільки** для `completion_interval` (нормативне рішення продукту; fixed RRULE недійсні календарні дні пропускає). Після `skip` базою стає `max(today, skipped_effective_date)` у зафіксованій зоні операції; no completion log. Без `completion_zone_id` completion-based sync operation не приймається. Для `floating_local` зберігаємо використану completion zone в операції, щоби два клієнти отримали **однакову наступну civil date**, хоча локальні alarms можуть мати різні UTC instants.
+7. **Відтворюваність:** усі next/preview/notifications викликають одну чисту функцію `nextOccurrence(rule, anchor, action, now: Instant, actionZone: IANA, policyVersion)`; не читають приховано системний `now`/timezone. Зміна default timezone в налаштуваннях — явна операція з preview; для існуючої fixed серії не змінює zone автоматично. Для правил із неоднозначною семантикою імпорту Todoist → `needs_review`, а не самовільна зміна графіка.
+
+**Golden fixtures до реалізації (вхід → очікування; контракт Ф1a/Ф2):**
+
+| ID | Вхід | Очікуваний результат |
+| --- | --- | --- |
+| TIME-01 | `Europe/Warsaw`, `fixed_zone`, DAILY 02:30, `COUNT=3`, DTSTART 2026-03-28 | 28.03 02:30, **29.03 03:30** (DST gap: зсув уперед, 01:30Z), 30.03 02:30; COUNT=3 — рівно три появи, зсунута рахується, на 31.03 появи немає |
+| TIME-02 | `Europe/Warsaw`, WEEKLY SU 02:30, 2026-10-25 | Двічі можливий локальний час: обрати перше входження, **00:30Z**, не створювати два occurrences |
+| TIME-03 | `fixed_zone=Europe/Warsaw`, DAILY 09:00; телефон переходить у `America/New_York` | Цивільний час задачі лишається **09:00 Варшава**; локальний вигляд/instant перераховується, RRULE anchor не змінюється |
+| TIME-04 | `floating_local`, DAILY 09:00; пристрій змінює зону | Stored `LocalDate`/09:00 не змінюються; alarms на цьому пристрої переплановано на **09:00 поточної зони**, sync не змінює due civil fields |
+| TIME-05 | `fixed_schedule` щопонеділка 09:00, `DTSTART=2026-11-02`, completion 2026-11-11 | Наступна active = **2026-11-16 09:00**; проміжна дата не породжує фіктивне `TaskCompletion` |
+| TIME-06 | `completion_interval` щомісяця о 09:00, complete 2026-01-31 у `Europe/Warsaw`, N=1 month | Наступна active = **2026-02-28 09:00**; записати completion_zone_id, правило short month працює лише для completion_interval |
+| TIME-07 | `all_day` `DTSTART=2026-01-01`, `FREQ=DAILY;COUNT=2` + `UNTIL` окремо | COUNT → 01.01, 02.01; `UNTIL=2026-01-02` → ті ж дві появи; комбінація COUNT+UNTIL без review заборонена |
+| TIME-08 | Explicit one-shot 2026-03-29 02:30 `Europe/Warsaw` | **Validation error + вибір** іншого допустимого часу, жодного silent shift/alarm |
+
+### §4.1. Task
+
+| Поле | Тип | Семантика |
+| --- | --- | --- |
+| `id` | UUID | Стабільний ID |
+| `content` | text | Назва; обов'язкова після trim |
+| `description` | text | З Ф6c — безпечний Markdown plain-source, без вкладених файлів у v1; до Ф6c — plain text зі збереженням символів без втрат |
+| `source_url` | text? | Опційне явне URL-джерело із Share Target (нормалізація, дозволені лише підтримувані безпечні схеми) |
+| `project_id` | UUID | Завжди існує; за замовчуванням Inbox |
+| `section_id` | UUID? | Якщо секція задана, вона з того самого проєкту |
+| `parent_id` | UUID? | До 4 рівнів; заборонені цикли |
+| `child_order` | text | Fractional ranking у батька/секції |
+| `day_order` | text? | Ручний порядок у Today |
+| `priority` | int 1..4 | `1` = найвищий p1 |
+| `due_date` | date? | Коли заплановано виконати; для повторюваної задачі — кеш `effective_due` її активної появи, оновлюється в тій самій транзакції |
+| `due_time` | time? | null = задача на весь день |
+| `due_tz` | text? | IANA timezone; null = плаваючий час |
+| `deadline` | date? | Крайній строк окремо від due |
+| `rrule` | text? | Підтримуваний fixed-schedule RRULE subset; для completion-based — окремий доменний interval із версією політики |
+| `recur_from_completion` | bool | false = fixed calendar schedule; true = completion_interval із явною calendar unit/interval, не RRULE наступної дати |
+| `recurrence_end_reason` | enum? | null, `exhausted_completed`, `exhausted_skipped`, `manually_stopped`; не створює `TaskCompletion` при Skip |
+| `recurrence_dtstart_date`, `recurrence_dtstart_time` | date, time? | Незмінний якір DTSTART серії; відокремлено від effective_due активної появи |
+| `recurrence_zone_mode`, `recurrence_zone_id` | enum, IANA? | all_day/fixed_zone/floating_local; zone_id тільки для fixed_zone |
+| `recurrence_interval_unit`, `recurrence_interval_n` | enum?, int? | Для completion_interval: DAY/WEEK/MONTH/YEAR і N>=1 |
+| `recurrence_policy_version` | int | Версія детермінованої політики next occurrence, перевіряється клієнтом і сервером |
+| `duration_min` | int? | Для календаря/time blocking, додатне число |
+| `completed_at` | timestamp? | Для неповторюваної задачі / кешована похідна ознака; **не** історія повторів |
+| `is_completable` | bool | Типово true; false — інформаційні задачі/заголовки (префікс `* ` у Quick Add) |
+| `revision` | bigint | Остання підтверджена сервером ревізія; локальні pending зміни окремо |
+| `created_at`, `updated_at`, `deleted_at` | timestamp? | Аудит; час пристрою не вирішує конфлікти |
+
+**Повтори — одне джерело правди.** Для повторюваної задачі існує **від нуля до однієї** `TaskOccurrence` у стані `active` (унікальний частковий індекс). Нуль допустимий після `UNTIL`/`COUNT`, явного `Stop recurrence`, до завершення імпортного `needs_review` або для завершеної/видаленої задачі. **Що бачить користувач:** якщо правило вичерпалось **Complete** останньої появи (`COUNT`/`UNTIL`), задача стає виконаною (`completed_at`, `recurrence_end_reason=exhausted_completed`) і зникає з активних списків; після **Skip** останньої появи розклад завершується (`exhausted_skipped`), **але задача лишається невиконаною** без дати, з позначкою «Повтор завершився без виконання» і можливістю перепланувати; після явного `Stop recurrence` задача лишається відкритою, без дати й без повтору (`manually_stopped`); задача з `needs_review` лишається відкритою з попередженням. Якщо активної появи немає, похідний кеш `Task.due_date`/`due_time` для повтору — `null`; історія лишається. Якщо є — кеш відповідає `effective_due` і змінюється в одній транзакції. Разове перенесення — `override` **активної** появи, а не Task.
+
+### §4.2. Інші сутності
+
+| Сутність | Ключові поля / правила | Обмін |
+| --- | --- | --- |
+| `Project` | `name`, `description`, `color`, `parent_id`, `child_order`, `is_inbox`, `view_mode`, `is_favorite`, `archived_at` | sync |
+| `Section` | `project_id`, `name`, `description`, `section_order`, `collapsed` | sync; `collapsed` можна зробити локальним налаштуванням пізніше |
+| `Label` | `name`, `color`, `item_order`, `is_favorite` | sync |
+| `TaskLabel` | `task_id`, `label_id`; унікальна пара, операційне додавання/видалення | sync |
+| `Reminder` | `task_id`, `type` (absolute/relative/deadline/independent_recurring), `scope` (`one_shot`/`occurrence_bound`/`task_until_completed`), `occurrence_id?`, `remind_at`, `offset_min`, `enabled`, `is_auto`, `repeat_rule?`, `stop_on_task_complete`; `Task.rrule` та `Reminder.repeat_rule` незалежні | sync |
+| `ReminderDelivery` | `reminder_id`, `occurrence_id`, `device_id`, `planned_at`, `fired_at`, `snoozed_until`, `dismissed_at` | локально за замовчуванням |
+| `TaskOccurrence` | `id`, `task_id`, `scheduled_for`, `state`, `effective_due`, `override`; не більше однієї `active` на задачу (частковий унікальний індекс), завершені й пропущені лишаються як історія | sync |
+| `TaskCompletion` | `id`, `task_id`, `occurrence_id?`, `scheduled_for`, `completed_at`, `undone_at`, `device_id`, `operation_id`, `completion_zone_id` (IANA для completion-based) | sync |
+| `TaskActivity` | `id`, `task_id`, `event_type`, `field_changes`, `created_at`, `device_id`, `operation_id` | sync (обмежити retention окремо) |
+| `TaskTemplate` | `name`, `description`, snapshot полів, дочірні шаблони, relative date rules | sync |
+| `Comment` | `task_id`, `content`, `created_at` | sync |
+| `Filter` | `name`, `color`, `item_order`, `definition` (версійний JSON `{groups: [{name, ast}], dedup_policy}`; для одногрупового фільтра groups має 1 елемент), `is_favorite` | sync |
+| `ViewSettings` | `view_key`, `layout`, `group_by`, `sort_by`, `show_completed`, optional options | sync |
+| `WidgetConfig` | `widget_id`, `view_key`, `theme`, `opacity`, `text_scale`, `compact`, `max_items`, `show_due`, `show_priority`, optional quick_switch | локально |
+| `OutboxOperation` | `operation_id`, `local_seq` (монотонний `BIGINT` у межах `workspace_id`, видається транзакційно), `workspace_id`, `entity`, `entity_id`, `op_type`, `field_patch`, `base_revision`, `device_id`, `created_at`, `status` (`pending`/`acked`/`absorbed_by_bootstrap`/`needs_resolution`), `attempts`, `last_error`; immutable payload до Ack/explicit resolve; унікально `(workspace_id, local_seq)` | локально |
+| `Device` | `device_id`, `user_id`, `platform`, `last_seen`, `last_ack_seq`, `sync_epoch`, `revoked_at` | server + local cache |
+| `SyncCursor` | `device_id`, `last_applied_change_seq`, `sync_epoch` | локально |
+| `LocalWorkspace` | `workspace_id`, `account_scope`, `inbox_id`, `claim_status` (`local`/`preparing`/`bound`/`needs_resolution`), `bound_user_id?`, `claim_operation_id?`, `backup_checkpoint?` | локально з Ф0 |
+| `ConfirmedSnapshot` | `entity`, `entity_id`, `server_revision`, `payload`, `last_change_seq` — остання підтверджена серверна основа; з'являється з Ф5b і створюється **лише для сутностей із pending-операціями** (тіньова копія), видаляється після Ack + Pull | локально |
+| `ConflictRecovery` | `operation_id`, `entity`, `entity_id`, `local_patch`, `server_snapshot`, `reason`, `created_at`, `resolution_status` — зберігає відхилене незалежно від життя Task | локально; UI Sync Health |
+| `ExternalIdentity` | `source` (`todoist`), `entity_type`, `source_id`, `local_id`, `source_hash`, `import_version`, `last_seen_at`; унікально `(workspace/account_scope, source, entity_type, source_id)` | з Ф1a: локально, з Ф5: sync |
+| `AccountClaim` | `claim_operation_id`, `workspace_id`, `target_user_id`, `status`, `inbox_merge_map`, `checkpoint`, `local_cutoff_seq`, `source_outbox_digest`, `error` — результат прив'язки/повтору без подвійного ефекту | локально + server receipt |
+| `ClaimBootstrapReceipt` | `claim_operation_id`, `workspace_id`, `cutoff_seq`, `source_outbox_digest`, `snapshot_checksum`, `committed_seq`, `result`, `absorbed_operation_ids_digest`; однозначно зв'язує bootstrap snapshot і старий outbox | сервер + локальна копія після claim |
+| `ServerChangeLog` | `change_seq`, `user_id`, `entity`, `entity_id`, `revision`, `operation_id`, `change_payload`, `tombstone`, `epoch` | лише сервер |
+| `ServerOperationReceipt` | `user_id`, `operation_id`, `result`, `applied_revision`, `committed_change_seq`, `epoch` | лише сервер |
+| `SyncConflict` | `entity`, `entity_id`, `base`, `local_patch`, `server_state`, `status`, `created_at` | Ф9, лише якщо знадобиться повний UI конфліктів; у v1 перезаписані значення фіксуються в `TaskActivity` |
+| `TrashEntry` | `entity`, `entity_id`, `deleted_at`, `restore_before`, snapshot/reference | sync |
+| `BackupManifest` | `backup_version`, `schema_version`, `account_scope`, `created_at`, `checksum` | у файлі експорту |
+| `DeferredTodoistNode` | `source_id`, `source_parent_id?`, `source_project_id?`, `source_section_id?`, `root_recurring_source_id`, `depth`, `deferred_reason`, `source_hash`, `import_run_id`; **тільки metadata** до Ф2, без вигаданого `Task.parent_id` | Ф1a: backup/report; Ф2: закрити після атомарного доімпорту підграфа |
+| `ImportPending` | `task_id`, `source` (`oneshot_recurring` — доімпорт у Ф2 / `todoist_sync`), `raw_due_string`, `lang`, `source_hash`, `parser_version?`, `status` (`pending`/`parsed`/`needs_review`), `conversion_operation_id?` | sync; повтори з імпорту, які ідемпотентно перетворює в RRULE клієнтський парсер |
+| `FilterImportPending` | `source_filter_id`, `ExternalIdentity`, `local_filter_id?` (nullable до Ф6a, FK лише після створення `Filter`), `source_query`, `source_lang?`, `source_description?`, `source_view_options?`, `source_hash`, `parser_version?`, `status` (`raw`/`converted`/`needs_review`/`activated`), `conversion_error?` | sync; raw дані з Ф5.1, активація у Ф6a |
+| `ImportCoverageReport` | `import_run_id`, `resource_type`, `source_count`, `target_count`, `status` (`imported`/`partial`/`metadata_only`/`unsupported`), `reason`, `examples` | локальний/exported звіт Ф1a/Ф5.1; жодних токенів |
+| `TodoistMap` | `entity`, `todoist_id`, `local_id`, `last_source_version`, `last_import_hash`; **серверна проєкція з `ExternalIdentity`, а не єдине джерело маппінгу** | лише сервер |
+| `Heartbeat` | `source` (id пристрою або `github`), `last_seen` | лише сервер |
+
+**Індекси й перевірки:** `project_id`, `parent_id`, `due_date`, `deadline`, `(user_id, deleted_at)`, `task_id` в історії, `change_seq` у server log; унікальні `operation_id`/`TaskLabel`/Inbox, `(account_scope, source, entity_type, source_id)` для `ExternalIdentity` і частковий індекс `TaskOccurrence(task_id) WHERE state = 'active'`. FK/каскади — через міграції; soft delete вимагає керованих каскадних переходів. При claim не змінювати UUID задач; лише прозоро зіставити системний Inbox та зовнішні ID.
