@@ -20,4 +20,10 @@
     <string name="yes">так</string>
     <string name="no">ні</string>
     <string name="close">Закрити</string>
+    <string name="tab_inbox">Вхідні</string>
+    <string name="tab_today">Сьогодні</string>
+    <string name="tab_upcoming">Майбутні</string>
+    <string name="tab_browse">Огляд</string>
+    <string name="today_placeholder">Тут будуть прострочені й сьогоднішні задачі.</string>
+    <string name="upcoming_placeholder">Тут будуть задачі на найближчі дні.</string>
 </resources>

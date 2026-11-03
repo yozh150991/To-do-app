@@ -21,4 +21,10 @@
     <string name="yes">yes</string>
     <string name="no">no</string>
     <string name="close">Close</string>
+    <string name="tab_inbox">Inbox</string>
+    <string name="tab_today">Today</string>
+    <string name="tab_upcoming">Upcoming</string>
+    <string name="tab_browse">Browse</string>
+    <string name="today_placeholder">Overdue tasks and tasks for today will appear here.</string>
+    <string name="upcoming_placeholder">Tasks for the coming days will appear here.</string>
 </resources>

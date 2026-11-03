@@ -12,6 +12,7 @@ import io.github.yozh150991.todo.core.database.LocalStoreProvider
 import io.github.yozh150991.todo.core.database.createWebAppDatabase
 import io.github.yozh150991.todo.core.domain.TaskRepository
 import io.github.yozh150991.todo.ui.App
+import io.github.yozh150991.todo.ui.FeatureFlags
 import io.github.yozh150991.todo.ui.about.AppInfo
 import io.github.yozh150991.todo.ui.uiModule
 import kotlinx.browser.document
@@ -98,6 +99,7 @@ fun main() {
         )
     }
     ComposeViewport(document.body!!) {
-        SizedViewport { App() }
+        // `?features=all` shows unfinished features (FeatureFlags); the e2e tests run without it.
+        SizedViewport { App(FeatureFlags.of(parameters["features"] == "all")) }
     }
 }

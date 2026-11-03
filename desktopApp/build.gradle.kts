@@ -27,3 +27,9 @@ compose.desktop {
         mainClass = "io.github.yozh150991.todo.desktop.MainKt"
     }
 }
+
+// `./gradlew :desktopApp:run` is a development run: show unfinished features (FeatureFlags).
+// Packaged builds (jpackage) start without the property.
+tasks.withType<JavaExec>().configureEach {
+    systemProperty("todo.features", "all")
+}

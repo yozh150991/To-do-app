@@ -35,6 +35,7 @@ kotlin {
             implementation(libs.compose.components.resources)
             implementation(libs.jetbrains.lifecycle.viewmodel.compose)
             implementation(libs.jetbrains.lifecycle.runtime.compose)
+            implementation(libs.jetbrains.navigation.compose)
             implementation(libs.koin.core)
             implementation(libs.koin.compose.viewmodel)
         }
