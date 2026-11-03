@@ -5,6 +5,7 @@ import androidx.sqlite.execSQL
 import io.github.yozh150991.todo.core.database.AppDatabase
 import io.github.yozh150991.todo.core.database.LocalStore
 import io.github.yozh150991.todo.core.database.createWebAppDatabase
+import io.github.yozh150991.todo.core.database.diagnostics
 import io.github.yozh150991.todo.core.domain.TaskRepository
 import io.github.yozh150991.todo.core.model.IdGenerator
 import io.github.yozh150991.todo.core.testing.SchemaV1Fixture
@@ -158,7 +159,7 @@ private suspend fun runSelfTest(phase: String, expectedWorkspace: String?): Json
     when (phase) {
         "write" -> writePhase(store, repository, database, checks)
         "verify" -> verifyPhase(store, repository, database, checks, expectedWorkspace, workspace.workspaceId)
-        "inspect" -> inspectPhase(store, repository)
+        "inspect" -> inspectPhase(store, repository, checks)
         else -> checks.check("known phase", false, phase)
     }
 
@@ -325,13 +326,28 @@ private suspend fun JsonObjectBuilder.verifyPhase(
     putFts(database, checks)
 }
 
-private suspend fun JsonObjectBuilder.inspectPhase(store: LocalStore, repository: TaskRepository) {
+private suspend fun JsonObjectBuilder.inspectPhase(store: LocalStore, repository: TaskRepository, checks: Checks) {
     val inboxId = repository.workspace().inboxId
     putJsonArray("open") { store.tasks.observeOpenInProject(inboxId).first().forEach { add(JsonPrimitive(it.content)) } }
     putJsonArray("completed") {
         store.tasks.observeCompletedInProject(inboxId).first().forEach { add(JsonPrimitive(it.content)) }
     }
     put("outbox", store.outbox.all().size)
+    // What the "About" dialog shows, read through the same Room path.
+    val d = store.diagnostics()
+    putJsonObject("diagnostics") {
+        put("sqlite", d.sqliteVersion)
+        put("fts5", d.fts5)
+        put("journal_mode", d.journalMode)
+        put("schema", d.schemaVersion)
+        put("quick_check", d.quickCheck)
+        put("tasks", d.tasks)
+        put("pending_operations", d.pendingOperations)
+    }
+    checks.check("diagnostics: FTS5 compiled in", d.fts5)
+    checks.check("diagnostics: schema v${AppDatabase.SCHEMA_VERSION}", d.schemaVersion == AppDatabase.SCHEMA_VERSION, "${d.schemaVersion}")
+    checks.check("diagnostics: quick_check ok", d.quickCheck == "ok", d.quickCheck)
+    checks.check("diagnostics: pending = outbox", d.pendingOperations == store.outbox.all().size, "${d.pendingOperations}")
 }
 
 private suspend fun JsonObjectBuilder.putFts(database: AppDatabase, checks: Checks) {

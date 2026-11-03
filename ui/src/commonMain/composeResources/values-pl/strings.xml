@@ -9,4 +9,15 @@
     <string name="database_unavailable">Nie udało się otworzyć bazy danych; dane nie zostały zmienione. %1$s</string>
     <string name="error_blank_content">Zadanie musi mieć nazwę</string>
     <string name="error_not_saved">Zmiana nie została zapisana: %1$s</string>
+    <string name="about">O aplikacji</string>
+    <string name="about_version">Wersja: %1$s</string>
+    <string name="about_platform">Urządzenie: %1$s</string>
+    <string name="about_sqlite">SQLite %1$s, FTS5: %2$s</string>
+    <string name="about_database">Baza: schemat v%1$d, dziennik %2$s, kontrola %3$s</string>
+    <string name="about_counts">Zadań: %1$d, czeka na synchronizację: %2$d</string>
+    <string name="about_loading">Zbieram informacje…</string>
+    <string name="about_failed">Nie udało się odczytać bazy: %1$s</string>
+    <string name="yes">tak</string>
+    <string name="no">nie</string>
+    <string name="close">Zamknij</string>
 </resources>

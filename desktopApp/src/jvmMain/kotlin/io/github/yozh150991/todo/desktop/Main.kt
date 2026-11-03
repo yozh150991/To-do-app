@@ -8,6 +8,7 @@ import io.github.yozh150991.todo.core.database.defaultDesktopDatabaseFile
 import io.github.yozh150991.todo.core.database.openAppDatabase
 import io.github.yozh150991.todo.core.domain.TaskRepository
 import io.github.yozh150991.todo.ui.App
+import io.github.yozh150991.todo.ui.about.AppInfo
 import io.github.yozh150991.todo.ui.uiModule
 import org.koin.core.context.startKoin
 import org.koin.dsl.module
@@ -21,6 +22,7 @@ fun main() {
             module {
                 single { stores }
                 single { TaskRepository(get<LocalStoreProvider>()) }
+                single { desktopAppInfo() }
             },
             uiModule,
         )
@@ -37,3 +39,10 @@ fun main() {
         }
     }
 }
+
+/** Packaged builds get the version from jpackage; `./gradlew :desktopApp:run` shows "dev". */
+private fun desktopAppInfo() = AppInfo(
+    version = System.getProperty("jpackage.app-version") ?: "dev",
+    platform = "${System.getProperty("os.name")} ${System.getProperty("os.version")} " +
+        "(${System.getProperty("os.arch")}), JVM ${System.getProperty("java.version")}",
+)

@@ -5,16 +5,26 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
+import io.github.yozh150991.todo.ui.about.AboutDialog
+import io.github.yozh150991.todo.ui.about.AboutViewModel
 import io.github.yozh150991.todo.ui.inbox.InboxScreen
 import io.github.yozh150991.todo.ui.inbox.InboxViewModel
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.module
 
-/** Shared UI module wiring; platform entry points add their own database/repository bindings. */
+/**
+ * Shared UI module wiring; platform entry points add their own bindings: the database
+ * (LocalStoreProvider), TaskRepository and AppInfo.
+ */
 val uiModule = module {
     viewModelOf(::InboxViewModel)
+    viewModelOf(::AboutViewModel)
 }
 
 // Own palette (spec §1.3: no Todoist branding). Refined in docs/UX_SPEC.md.
@@ -40,6 +50,8 @@ fun AppTheme(content: @Composable () -> Unit) {
 @Composable
 fun App() {
     AppTheme {
-        InboxScreen(viewModel = koinViewModel<InboxViewModel>())
+        var aboutOpen by rememberSaveable { mutableStateOf(false) }
+        InboxScreen(viewModel = koinViewModel<InboxViewModel>(), onOpenAbout = { aboutOpen = true })
+        if (aboutOpen) AboutDialog(viewModel = koinViewModel<AboutViewModel>(), onDismiss = { aboutOpen = false })
     }
 }

@@ -1,6 +1,8 @@
 package io.github.yozh150991.todo.core.domain
 
+import io.github.yozh150991.todo.core.database.DatabaseDiagnostics
 import io.github.yozh150991.todo.core.database.LocalStore
+import io.github.yozh150991.todo.core.database.diagnostics
 import io.github.yozh150991.todo.core.database.LocalStoreProvider
 import io.github.yozh150991.todo.core.database.entity.LocalWorkspaceEntity
 import io.github.yozh150991.todo.core.database.entity.TaskActivityEntity
@@ -86,6 +88,9 @@ class TaskRepository(
     }
 
     fun observePendingOperationCount(): Flow<Int> = flow { emitAll(store().outbox.observePendingCount()) }
+
+    /** SQLite version, FTS5, journal, schema, quick_check and counts (About dialog, device evidence). */
+    suspend fun diagnostics(): DatabaseDiagnostics = store().diagnostics()
 
     suspend fun getTask(id: String): Task? = store().tasks.getById(id)?.toDomain()
 
