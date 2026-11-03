@@ -6,7 +6,7 @@
 
 Web/Desktop релізів і production-міграцій ще немає. Чинне технічне завдання: [`task-manager-scope-roadmap-v2.6.1.md`](task-manager-scope-roadmap-v2.6.1.md); історія рішень специфікації: [`docs/SPEC_CHANGELOG.md`](docs/SPEC_CHANGELOG.md).
 
-### Ф0 — у роботі
+### Ф0 — gate закрито 3 листопада 2026 року
 
 - Каркас Kotlin Multiplatform: `core/model`, `core/database`, `core/domain`, `ui`, `androidApp`, `desktopApp`; версії зафіксовано в `gradle/libs.versions.toml` (Kotlin 2.4.21, AGP 9.5.0, Gradle 9.7.0, Compose Multiplatform 1.12.2, Room 3.0.3, SQLite bundled 2.7.1; Android compileSdk/targetSdk 37, minSdk 26). Статуси сумісності — `docs/TECH_COMPATIBILITY.md`.
 - Room 3 schema v1: `local_workspace`, `project`, `task`, `task_activity`, `outbox_operation`, `external_identity` (`docs/DATA_MODEL.md`).
@@ -30,6 +30,14 @@ Web/Desktop релізів і production-міграцій ще немає. Чи�
 
 > Перший запис про реальний реліз створюється лише після збірки, перевірки й публікації артефактів. Не переносити сюди історичні правила зі специфікації.
 
+## [0.0.2] — 2026-11-03
+
+Другий технічний реліз Ф0: перевірка оновлення поверх попередньої версії й ключа з резервної копії на реальному телефоні. Ним закрито gate Ф0.
+
+- Android APK `0.0.2` (`versionCode` 2), лише `arm64-v8a`. Зібрано основним шляхом — `tools/release/build-release.sh` на комп'ютері власника ключем, відновленим із резервної копії; тег `v0.0.2` (коміт `f255e0e`). GitHub зібрав запасну копію в Releases (`todo-v0.0.2.apk`, `.sha256`).
+- Нове для користувача: діалог «Про застосунок» (версія, пристрій, SQLite, FTS5, схема, журнал, перевірка бази, лічильники).
+- Перевірено на телефоні власника (Xiaomi 24094RAD4G, Android 16 / API 36): встановлено поверх `0.0.1` без видалення, задача з `0.0.1` на місці; SQLite 3.50.1, FTS5 — так, схема v2, WAL, `quick_check ok`.
+
 ## [0.0.1] — 2026-11-02
 
 Технічний реліз Ф0: перевірка шляху підпису й оновлення, а не продуктова версія.
@@ -37,4 +45,4 @@ Web/Desktop релізів і production-міграцій ще немає. Чи�
 - Android APK `0.0.1` (`versionCode` 1), лише `arm64-v8a`, підписаний ключем релізу; у GitHub Releases: `todo-v0.0.1.apk` і `todo-v0.0.1.apk.sha256`.
 - Зібрано запасним шляхом — workflow `Release` на GitHub з тегу `v0.0.1` (коміт `07698b5`), сертифікат підпису перевірено проти закріпленого.
 - Вміст: екран Inbox (додати й виконати задачу), локальна база Room 3 schema v2, outbox; без синхронізації.
-- Встановлення на телефон власника й оновлення поверх нього до `0.0.2` — ще не підтверджено (gate Ф0).
+- Встановлено на телефон власника; 03.11.2026 оновлено поверх до `0.0.2` без втрати задачі.

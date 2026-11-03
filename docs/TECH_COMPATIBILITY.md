@@ -77,7 +77,7 @@ Supabase CLI 3.0.0 вийшов 02.11.2026; CI лишається на 2.122.0 �
 
 ## Висновки на зараз
 
-- **Android:** шар даних пройшов runtime-перевірку на мінімальному (API 26) і актуальному (API 37) Android: CRUD і збереження після перезапуску, атомарність entity + activity + outbox, безперервний `local_seq` при 50 паралельних записах, безпечне оновлення схеми з відкатом. Не перевірено на реальному телефоні.
+- **Android:** шар даних пройшов runtime-перевірку на мінімальному (API 26) і актуальному (API 37) Android: CRUD і збереження після перезапуску, атомарність entity + activity + outbox, безперервний `local_seq` при 50 паралельних записах, безпечне оновлення схеми з відкатом. Реальний телефон (Xiaomi 24094RAD4G, Android 16 (API 36), arm64-v8a, 03.11.2026): `v0.0.2` встановлено поверх `v0.0.1` без втрати задачі; SQLite 3.50.1, FTS5, WAL, `quick_check ok` ([скріншот](evidence/f0-v0.0.2-about-xiaomi-android16.jpg)).
 - **Desktop/JVM:** ті самі сценарії `pass`; упакований застосунок відкриває вікно, зберігає задачу, введену в інтерфейсі, і переживає жорстке завершення процесу (перевірка в CI на віртуальному дисплеї). Реальний робочий стіл Windows — перевірка власника пізніше (Ф8).
 - **Web:** Room/OPFS spike пройшов у обов'язкових браузерах (Chromium, Firefox): та сама схема, DAO і `TaskRepository` через `WebWorkerSQLiteDriver` і власний worker на SQLite WASM з VFS `opfs-sahpool`. COOP/COEP не потрібні, отже підходить будь-який статичний хостинг. Обмеження: одна вкладка; WebKit/Safari лише поза приватним режимом; сховище best-effort до синхронізації Ф5; Compose потребує WebGL 2. Fallback на IndexedDB не знадобився. Рішення — ADR-004 (Accepted).
 
@@ -85,16 +85,37 @@ Supabase CLI 3.0.0 вийшов 02.11.2026; CI лишається на 2.122.0 �
 
 | Пункт | Стан |
 | --- | --- |
-| `sqlite_version()` і `compile_options` на Android API 26 і JVM | Виконано в CI; на реальному телефоні — ні |
+| `sqlite_version()` і `compile_options` на Android API 26 і JVM | Виконано в CI; на реальному телефоні — так (Xiaomi 24094RAD4G, Android 16 (API 36), arm64-v8a: SQLite 3.50.1, FTS5 — так; 03.11.2026) |
 | FTS5 uk/pl/en на API 26 і актуальному Android | Виконано (API 26, API 37) |
 | `VACUUM INTO` під записами у WAL, `integrity_check`, semantic comparison, crash і нестача місця | Виконано (сценарії `walFramesAreCapturedBySnapshot`, `interruptedUpgradeIsRecovered`, `insufficientSpaceLeavesDatabaseUntouched`) |
 | Приріст розміру APK і рішення щодо ABI split | Рішення: release лише `arm64-v8a` (`-PreleaseAbis` для інших). Release APK — 10.7 MiB; debug з усіма ABI — 17.8 MiB |
 
-## Що залишилось для gate Ф0
+## Gate Ф0 — закрито 3 листопада 2026 року
 
-1. **Власник:** ключ створено 02.11.2026, відбиток закріплено в `.github/release-signing-cert.sha256`. Збірка — на комп'ютері власника скриптом `build-release.sh`, GitHub — запасна; без застосунку-оновлювача (ADR-003). `v0.0.1` опубліковано запасним шляхом (workflow `Release`, 02.11.2026). Лишилось: дві резервні копії, Android Studio на комп'ютері, встановити `v0.0.1` на телефон, зібрати `v0.0.2` на комп'ютері з ключем із резервної копії й оновити поверх (`docs/RELEASE.md`, чекліст gate).
+Приймання Ф0 (spec §11) і докази:
+
+| Критерій | Доказ |
+| --- | --- |
+| Android APK встановлюється, створює й читає локальну задачу | Телефон власника (Xiaomi 24094RAD4G, Android 16 (API 36), arm64-v8a): задача «test» у `v0.0.1` і після оновлення; емулятори API 26/37 у CI |
+| Android `pass`: Room CRUD після перезапуску, транзакційний outbox, WAL-safe snapshot, міграція/відновлення; Desktop і Web — `pass` | Матриця вище; jobs «Android emulator API 26/37», «Desktop window», «Web in browsers» на кожному PR |
+| Транзакція entity + outbox проходить rollback/crash | `DatabaseScenarios` (JVM, API 26/37) і браузерний self-test |
+| Версії сумісні й закріплені, статуси чесні | `gradle/libs.versions.toml`, розділи «Зафіксовані версії», «Матриця», «QA-інструменти» |
+| CI зелений; ключі недоступні PR із недовірених гілок | CI на кожному PR; ключ лише в середовищі GitHub `release` з правилом для тегів `v*.*.*` |
+| Ключ у двох незалежних місцях; збірка ключем із резервної копії ставиться поверх | Власник підтвердив 03.11.2026: дві копії, `v0.0.2` зібрано `build-release.sh` ключем із резервної копії |
+| Оновлення `v0.0.1` → `v0.0.2` обраним каналом без втрати задачі | Задача «test» із `v0.0.1` на місці у `v0.0.2`, «Про застосунок»: `0.0.2 (2)`, задач 1 ([скріншот](evidence/f0-v0.0.2-about-xiaomi-android16.jpg)); GitHub зібрав запасну копію `v0.0.2` у Releases |
+| Web: worker, COOP/COEP, хостинг | ADR-004 (Accepted) |
+| `docs/UX_SPEC.md`, контракти `LocalWorkspace`, `ExternalIdentity`, confirmed/pending | `docs/UX_SPEC.md` (погоджено), `docs/DATA_MODEL.md` |
+| `TECH_COMPATIBILITY.md` із доказами | цей файл |
+| Golden fixtures часу (time-only subset) | `TimeGoldenFixtures`: JVM, Android, браузери |
+| Gate ADR-001 на реальному телефоні | рядок вище в «Стан gate ADR-001» |
+
+З робіт Ф0 (не з приймання) навігація й прапорці функцій — у PR #19.
+
+## Історія gate Ф0
+
+1. ~~Власник: ключ, дві резервні копії, `v0.0.1` → `v0.0.2` на телефоні~~ — виконано 03.11.2026 (`docs/RELEASE.md`, чекліст gate).
 2. ~~Web spike~~ — `pass`, ADR-004 прийнято. ~~Desktop runtime UI-перевірка~~ — `pass` (job «Desktop window (Xvfb)»).
 3. ~~supabase-kt module matrix~~ — `pass` на всіх трьох платформах (`core/sync/SupabaseProbe`, jobs «Supabase modules»).
 4. ~~`docs/UX_SPEC.md`~~ (погоджено 02.11.2026), ~~рядки в Compose resources (uk/en/pl)~~, ~~розбиття специфікації на `docs/*` за §13.4~~ (03.11.2026, індекс — §0.3 специфікації).
 5. ~~Golden fixtures часу (time-only subset)~~ — TIME-01..04, TIME-08 виконуються на JVM, Android і в браузерах (`core/testing/TimeGoldenFixtures`); TIME-05..07 — разом із recurrence engine у Ф2.
-6. Перевірка на реальному телефоні: `v0.0.2` поверх `v0.0.1` і скріншот діалогу «Про застосунок» (версія SQLite, FTS5, схема, журнал, `quick_check`) — закриває рядок «на реальному телефоні» в gate ADR-001. Ті самі значення через Room уже перевіряються в CI (`diagnosticsThroughRoom` на JVM і API 26/37, `?selftest=inspect` у браузерах).
+6. ~~Перевірка на реальному телефоні~~ — Xiaomi 24094RAD4G, Android 16 (API 36), arm64-v8a, 03.11.2026.
