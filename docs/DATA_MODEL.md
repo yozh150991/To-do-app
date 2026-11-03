@@ -165,6 +165,7 @@
 | `recurrence_interval_unit`, `recurrence_interval_n` | enum?, int? | Для completion_interval: DAY/WEEK/MONTH/YEAR і N>=1 |
 | `recurrence_policy_version` | int | Версія детермінованої політики next occurrence, перевіряється клієнтом і сервером |
 | `duration_min` | int? | Для календаря/time blocking, додатне число |
+| `duration_days` | int? | Багатоденна тривалість (ADR-005): ціле ≥ 1, від `due_date` включно; разом із `duration_min` заборонено |
 | `completed_at` | timestamp? | Для неповторюваної задачі / кешована похідна ознака; **не** історія повторів |
 | `is_completable` | bool | Типово true; false — інформаційні задачі/заголовки (префікс `* ` у Quick Add) |
 | `revision` | bigint | Остання підтверджена сервером ревізія; локальні pending зміни окремо |
