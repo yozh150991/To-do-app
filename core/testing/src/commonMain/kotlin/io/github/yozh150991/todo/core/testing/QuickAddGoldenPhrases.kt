@@ -30,8 +30,9 @@ import kotlinx.datetime.LocalTime
  * - R8. Words are matched whole: no dates inside other words, e-mail addresses or URLs; a bare
  *   number is not a time; `#` and `p1`–`p4` count only at a word start; `#name` must be an
  *   existing project (longest name wins), otherwise it stays text.
- * - R9. Short English weekday forms (mon … sun) count only after "on", "next" or "this":
- *   "sun cream" is not Sunday.
+ * - R9. English weekdays need "on", "next" or "this" in front; the short forms (mon … sun) only
+ *   "next" or "this": "put on sun cream" is not Sunday. Weekdays in every language need their
+ *   preposition (у/в, w/we), so "every Monday" and "co poniedziałek" stay text until Ф2.
  * - R10. A Latin "o" typed instead of the Cyrillic "о" ("o 9") still means "at".
  * - R11. Recognised words are removed from the title together with their preposition
  *   ("у п'ятницю", "on Friday", "w piątek", "at 9am"); the rest keeps its spelling, spaces collapsed.
