@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.yozh150991.todo.core.domain.TaskRepository
 import io.github.yozh150991.todo.core.model.Task
-import io.github.yozh150991.todo.core.model.ValidationCode
 import io.github.yozh150991.todo.core.model.ValidationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -28,7 +27,7 @@ data class InboxUiState(
     val loading: Boolean = true,
 )
 
-/** Ф0 proof screen: create, list and complete tasks in the Inbox through the repository only. */
+/** Inbox list: open tasks of the Inbox and completing them, through the repository only. New tasks come from Quick Add. */
 class InboxViewModel(private val repository: TaskRepository) : ViewModel() {
 
     private val _error = MutableStateFlow<UiMessage?>(null)
@@ -44,19 +43,6 @@ class InboxViewModel(private val repository: TaskRepository) : ViewModel() {
             emit(InboxUiState(loading = false))
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), InboxUiState())
-
-    fun addTask(content: String) {
-        viewModelScope.launch {
-            try {
-                repository.createTask(content)
-                _error.value = null
-            } catch (e: ValidationException) {
-                _error.value = if (e.code == ValidationCode.BLANK_CONTENT) UiMessage.BlankContent else UiMessage.NotSaved(e.message)
-            } catch (e: IllegalStateException) {
-                _error.value = UiMessage.DatabaseUnavailable(e.message)
-            }
-        }
-    }
 
     fun complete(taskId: String) {
         viewModelScope.launch {

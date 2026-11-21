@@ -1,0 +1,20 @@
+# Quick Add and task details (docs/UX_SPEC.md §2.1, §3.3, §3.4; Ф1a PR 1): the "+" button of the
+# Inbox opens the sheet, "Add" creates the task and keeps the sheet open, "Open" shows the new
+# task's details over the list, and Back returns to the list, where the task is.
+appId: io.github.yozh150991.todo.debug
+---
+- launchApp:
+    clearState: true
+- tapOn: "Inbox"
+- assertVisible: "No tasks yet"
+- tapOn: "Add task"
+- inputText: "Buy milk"
+- tapOn: "Add"
+- assertVisible: "Added: Buy milk"
+- takeScreenshot: quick-add
+- tapOn: "Open"
+- assertVisible: "Project: Inbox"
+- takeScreenshot: task-detail
+- back
+- assertNotVisible: "Project: Inbox"
+- assertVisible: "Buy milk"

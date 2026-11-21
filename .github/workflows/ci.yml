@@ -55,6 +55,20 @@ jobs:
             > ui/build/reports/runtime-evidence/roborazzi.txt
           cat ui/build/reports/runtime-evidence/roborazzi.txt
 
+      # Screenshots without a committed baseline (ui/screenshots/README.md), base64 in the log so
+      # they can be committed from this renderer: decode the lines between the markers.
+      - name: Print new screenshot baselines
+        if: always()
+        run: |
+          shopt -s nullglob
+          for f in ui/build/reports/new-baselines/*.b64; do
+            name=$(basename "$f" .b64)
+            echo "BEGIN-BASELINE $name"
+            fold -w 2000 "$f"
+            echo
+            echo "END-BASELINE $name"
+          done
+
       # The owner's release scripts end to end with a throwaway key: create-keystore.sh →
       # build-release.sh → signed, verified APK (docs/RELEASE.md). The Windows job runs the same.
       - name: Local release scripts with a throwaway key

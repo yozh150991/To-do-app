@@ -27,4 +27,17 @@
     <string name="tab_browse">Browse</string>
     <string name="today_placeholder">Overdue tasks and tasks for today will appear here.</string>
     <string name="upcoming_placeholder">Tasks for the coming days will appear here.</string>
+    <string name="add_task_fab">Add task</string>
+    <string name="empty_inbox_hint">Tap + to add one</string>
+    <string name="quick_add_added">Added: %1$s</string>
+    <string name="quick_add_open">Open</string>
+    <string name="quick_add_for_today">For today</string>
+    <string name="quick_add_for_date">For %1$s</string>
+    <string name="task_not_found">This task no longer exists</string>
+    <string name="task_project">Project: %1$s</string>
+    <string name="task_due">Date: %1$s</string>
+    <string name="task_deadline">Deadline: %1$s</string>
+    <string name="task_priority">Priority %1$d</string>
+    <string name="task_no_date">No date</string>
+    <string name="task_completed">Completed</string>
 </resources>
