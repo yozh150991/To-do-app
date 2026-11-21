@@ -142,7 +142,8 @@ fun AppNavigation(
 
     fun open(tab: Tab) {
         navController.navigate(tab.route) {
-            popUpTo(start.route) { saveState = true }
+            // The start tab's list, not its graph: popping up to the graph would remove the list too.
+            popUpTo(start.listRoute) { saveState = true }
             launchSingleTop = true
             restoreState = true
         }
