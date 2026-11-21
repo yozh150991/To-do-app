@@ -36,7 +36,7 @@ import kotlin.js.Promise
  *                                               used after the e2e test typed a task into the real UI
  *   index.html?selftest=clear                 → deletes the database pool from OPFS, as clearing
  *                                               site data does; the next start must be clean
- *   index.html?selftest=migrate               → a genuine schema v1 file, opened by the v2 AppDatabase
+ *   index.html?selftest=migrate               → a genuine schema v1 file, opened by the current AppDatabase (v1 → v2 → v3)
  *   index.html?selftest=time                  → golden time fixtures TIME-01..04, TIME-08 (no database)
  *   index.html?selftest=supabase&url=…&key=…  → supabase-kt Auth / PostgREST / Realtime against a
  *                                               local Supabase stack (no database involved)
@@ -241,8 +241,8 @@ private suspend fun JsonObjectBuilder.putSnapshot(database: AppDatabase, store: 
 }
 
 /**
- * Room AutoMigration 1 → 2 through the Web worker, mirroring DatabaseScenarios.migrationFromV1PreservesData
- * on Android/JVM: the same v1 DDL and seed (core/testing) go straight through the driver, then the v2
+ * Room AutoMigrations 1 → 2 → 3 through the Web worker, mirroring DatabaseScenarios.migrationFromV1PreservesData
+ * on Android/JVM: the same v1 DDL and seed (core/testing) go straight through the driver, then the current
  * AppDatabase opens the file. The FIX-01 snapshot around it on the Web is a Ф7 item (ADR-004 п. 7).
  */
 private suspend fun JsonObjectBuilder.migratePhase(checks: Checks) {
@@ -273,6 +273,12 @@ private suspend fun JsonObjectBuilder.migratePhase(checks: Checks) {
         "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('section', 'label', 'task_label')",
     )
     checks.check("v2 tables created", newTables == "3", newTables)
+    val v3Tables = database.textQuery(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('reminder', 'reminder_delivery', 'deferred_todoist_node')",
+    )
+    checks.check("v3 tables created", v3Tables == "3", v3Tables)
+    val durationDays = database.textQuery("SELECT COUNT(*) FROM pragma_table_info('task') WHERE name = 'duration_days'")
+    checks.check("task.duration_days added (ADR-005)", durationDays == "1", durationDays)
     val sectionFk = database.textQuery(
         "SELECT COUNT(*) FROM pragma_foreign_key_list('task') WHERE \"table\" = 'section' AND \"from\" = 'section_id'",
     )

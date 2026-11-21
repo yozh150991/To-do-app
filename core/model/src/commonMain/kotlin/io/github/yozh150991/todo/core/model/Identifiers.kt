@@ -21,6 +21,7 @@ enum class EntityType(val wire: String) {
     PROJECT("project"),
     SECTION("section"),
     LABEL("label"),
+    REMINDER("reminder"),
     ;
 
     companion object {

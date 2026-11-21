@@ -334,6 +334,7 @@ class TaskRepository(
         put("due_tz", due?.zoneId)
         put("deadline", deadline?.toString())
         put("duration_min", durationMinutes)
+        put("duration_days", durationDays)
         put("is_completable", isCompletable)
         put("created_at", createdAt.toString())
     }

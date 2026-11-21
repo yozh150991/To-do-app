@@ -50,6 +50,9 @@ class DatabaseDeviceTest {
     @Test fun migrationFromV1PreservesData() =
         runBlocking { DatabaseScenarios.migrationFromV1PreservesData(env("migration")) }
 
+    @Test fun migrationFromV2PreservesData() =
+        runBlocking { DatabaseScenarios.migrationFromV2PreservesData(env("migration-v2")) }
+
     @Test fun walFramesAreCapturedBySnapshot() =
         runBlocking { DatabaseScenarios.walFramesAreCapturedBySnapshot(env("wal")) }
 

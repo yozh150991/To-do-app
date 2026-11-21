@@ -68,6 +68,8 @@ data class Task(
     val due: Due? = null,
     val deadline: LocalDate? = null,
     val durationMinutes: Int? = null,
+    /** ADR-005: a span of whole days from [due] on; never together with [durationMinutes]. */
+    val durationDays: Int? = null,
     val isCompletable: Boolean = true,
     val completedAt: Instant? = null,
     val recurrenceEndReason: RecurrenceEndReason? = null,
@@ -77,6 +79,10 @@ data class Task(
     val updatedAt: Instant,
     val deletedAt: Instant? = null,
 ) {
+    init {
+        TaskRules.checkDuration(durationMinutes, durationDays)
+    }
+
     val isCompleted: Boolean get() = completedAt != null
     val isDeleted: Boolean get() = deletedAt != null
 }
@@ -106,6 +112,18 @@ class ValidationException(
 ) : IllegalArgumentException(message)
 
 object TaskRules {
+    /**
+     * spec §4.1 `duration_min` and ADR-005 `duration_days`: positive when set, and a task has
+     * minutes, days or neither — never both.
+     */
+    fun checkDuration(minutes: Int?, days: Int?) {
+        if (minutes != null && minutes < 1) throw ValidationException("duration_min must be positive, got $minutes")
+        if (days != null && days < 1) throw ValidationException("duration_days must be at least 1, got $days")
+        if (minutes != null && days != null) {
+            throw ValidationException("A task has a duration in minutes or in days, not both (ADR-005)")
+        }
+    }
+
     /** spec §4.1: content is mandatory after trim. */
     fun normalizeContent(raw: String): String {
         val trimmed = raw.trim()
