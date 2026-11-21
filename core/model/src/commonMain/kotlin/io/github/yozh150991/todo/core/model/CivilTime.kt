@@ -154,6 +154,15 @@ object TimeZones {
         ensureTimeZoneRules()
         return TimeZone.of(id)
     }
+
+    /**
+     * The device zone. Only platform entry points and default constructor arguments call this;
+     * domain code receives the zone as a parameter (spec §4.0.1 п. 7).
+     */
+    fun systemDefault(): TimeZone {
+        ensureTimeZoneRules()
+        return TimeZone.currentSystemDefault()
+    }
 }
 
 /** Makes the platform's IANA rules available to kotlinx-datetime (only the Web needs to do anything). */

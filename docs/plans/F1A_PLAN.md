@@ -52,7 +52,7 @@
 
 Налаштування (авто-нагадування, зсув) — не в Room, а через спільний інтерфейс `SettingsStore` з адаптерами: DataStore (Android), файл властивостей (Desktop), `localStorage` (Web) — spec §3.
 
-Індекси: `task(due_date)`, `task(deadline)`, `task(completed_at, deleted_at)` для «Сьогодні»/«Майбутніх»; `reminder(task_id)`. Міграція — Room 2 → 3 через `openAppDatabase` зі snapshot (FIX-01): нові таблиці, індекси й колонка `duration_days`. Room не описує CHECK в entity, тож обмеження «не разом із `duration_min`» — або в ручному кроці міграції (`ADD COLUMN … CHECK`, SQLite перевіряє наявні рядки), або в домені й тестах — рішення в PR 2.
+Індекси: `task(due_date)`, `task(deadline)`, `task(deleted_at)` (з v1) і `reminder(task_id)` (v3) покривають «Сьогодні» й «Майбутні»; складений `task(completed_at, deleted_at)` — лише якщо вимірювання на 10 000 задач у Ф1b (spec §2.2) покаже потребу, окремою міграцією. Міграція — Room 2 → 3 через `openAppDatabase` зі snapshot (FIX-01): нові таблиці, індекси й колонка `duration_days`. Room не описує CHECK в entity, тож обмеження «не разом із `duration_min`» — або в ручному кроці міграції (`ADD COLUMN … CHECK`, SQLite перевіряє наявні рядки), або в домені й тестах — рішення в PR 2.
 
 ## 5. Контракти операцій
 
@@ -61,11 +61,11 @@
 | Сутність | Операції Ф1a | `field_patch` |
 | --- | --- | --- |
 | `task` | `create`, `update`, `complete`, `uncomplete`, `delete`, `restore`, `move` | Лише змінені поля: `content`, `description`, `priority`, `due_date`, `due_time`, `due_tz`, `deadline`, `duration_min`, `duration_days`, `project_id`, `parent_id`, `child_order`. Перенесення чи видалення піддерева — окрема операція на кожну змінену задачу, усі в одній транзакції й одній групі Undo |
-| `project` | `create`, `update`, `archive`, `unarchive`, `delete` | `name`, `color`, `parent_id`, `child_order`, `is_favorite`; `delete` несе вибір долі задач (перемістити в Inbox / видалити разом) |
+| `project` | `create`, `update`, `archive`, `unarchive`, `delete`, `restore` | `name`, `description`, `color`, `parent_id`, `child_order`, `is_favorite`; `delete` несе вибір долі задач (`task_fate`: перемістити в Inbox / видалити разом), а самі задачі отримують власні `task.move` / `task.delete` перед нею; `restore` — Undo видалення |
 | `reminder` | `create`, `update`, `delete` | Повний запис при `create`, змінені поля при `update` |
 | імпорт / restore | без outbox на кожен рядок | Restore у порожнє сховище переносить outbox і `local_seq` з backup як є (§3.2: не генерувати тисячі дублів); `ExternalIdentity` зберігає `local_id` |
 
-Undo — нова операція (наприклад, `uncomplete` після `complete`), а не видалення запису з outbox.
+Undo — нова операція (наприклад, `uncomplete` після `complete`), а не видалення запису з outbox. Реалізовано в PR 2b; повний перелік операцій, payload і подій історії — `docs/DATA_MODEL.md`, «Операції Ф1a».
 
 ## 6. Ризики
 

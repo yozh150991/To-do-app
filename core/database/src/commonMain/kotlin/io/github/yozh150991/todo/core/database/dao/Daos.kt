@@ -42,8 +42,29 @@ interface ProjectDao {
     @Query("SELECT * FROM project WHERE id = :id")
     suspend fun getById(id: String): ProjectEntity?
 
+    @Update
+    suspend fun update(project: ProjectEntity): Int
+
     @Query("SELECT * FROM project WHERE is_inbox = 1 AND deleted_at IS NULL")
     suspend fun getInbox(): ProjectEntity?
+
+    /** Direct sub-projects, including archived and deleted ones (callers filter). */
+    @Query("SELECT * FROM project WHERE parent_id = :parentId ORDER BY child_order, id")
+    suspend fun children(parentId: String): List<ProjectEntity>
+
+    @Query("SELECT MAX(child_order) FROM project WHERE parent_id IS NULL")
+    suspend fun lastTopLevelOrder(): String?
+
+    @Query("SELECT MAX(child_order) FROM project WHERE parent_id = :parentId")
+    suspend fun lastChildOrder(parentId: String): String?
+
+    /** Projects that are neither archived nor deleted, in tree order of siblings. */
+    @Query("SELECT * FROM project WHERE deleted_at IS NULL AND archived_at IS NULL ORDER BY child_order, id")
+    fun observeActive(): Flow<List<ProjectEntity>>
+
+    /** Every row in any state, by id (backup, invariant checks in tests). */
+    @Query("SELECT * FROM project ORDER BY id")
+    suspend fun all(): List<ProjectEntity>
 
     @Query("SELECT COUNT(*) FROM project")
     suspend fun count(): Int
@@ -81,6 +102,30 @@ interface TaskDao {
     /** Largest sibling order key at the top level of a project, used to append new tasks. */
     @Query("SELECT MAX(child_order) FROM task WHERE project_id = :projectId AND parent_id IS NULL")
     suspend fun lastTopLevelOrder(projectId: String): String?
+
+    /** Largest order key among the sub-tasks of [parentId], used to append a sub-task. */
+    @Query("SELECT MAX(child_order) FROM task WHERE parent_id = :parentId")
+    suspend fun lastChildOrder(parentId: String): String?
+
+    /** Direct sub-tasks in any state (open, completed, deleted); callers filter. */
+    @Query("SELECT * FROM task WHERE parent_id = :parentId ORDER BY child_order, id")
+    suspend fun children(parentId: String): List<TaskEntity>
+
+    /** Top-level tasks of a project in any state, in list order. */
+    @Query("SELECT * FROM task WHERE project_id = :projectId AND parent_id IS NULL ORDER BY child_order, id")
+    suspend fun topLevelInProject(projectId: String): List<TaskEntity>
+
+    /** Tasks of a project that are not in the bin (open and completed). */
+    @Query("SELECT * FROM task WHERE project_id = :projectId AND deleted_at IS NULL ORDER BY child_order, id")
+    suspend fun liveInProject(projectId: String): List<TaskEntity>
+
+    /** Tasks of a project binned at exactly [deletedAt] — by one command, e.g. with their project. */
+    @Query("SELECT * FROM task WHERE project_id = :projectId AND deleted_at = :deletedAt ORDER BY child_order, id")
+    suspend fun binnedInProjectAt(projectId: String, deletedAt: Long): List<TaskEntity>
+
+    /** Every row in any state, by id (backup, invariant checks in tests). */
+    @Query("SELECT * FROM task ORDER BY id")
+    suspend fun all(): List<TaskEntity>
 
     @Query("SELECT COUNT(*) FROM task")
     suspend fun count(): Int

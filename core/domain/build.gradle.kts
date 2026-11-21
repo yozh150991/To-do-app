@@ -33,6 +33,8 @@ kotlin {
         jvmTest.dependencies {
             implementation(libs.kotlinx.coroutines.test)
             implementation(libs.turbine)
+            // Property-based sequences of commands (spec §12.1, plan Ф1a PR 2).
+            implementation(libs.kotest.property)
         }
     }
 }
