@@ -32,6 +32,7 @@ class CommandSequencePropertyTest {
         ) { commands, seeds ->
             val f = RepoFixture()
             try {
+                f.repo.workspace() // the Inbox exists before the first command, as in the app
                 val moves = mutableListOf<TaskMove>()
                 val deletions = mutableListOf<ProjectDeletion>()
                 commands.forEachIndexed { step, command ->
