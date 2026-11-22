@@ -79,6 +79,8 @@ class TaskDetailTest {
 
     @AfterTest
     fun cleanUp() {
+        // The details save what is typed as they close; let those writes finish before the database goes.
+        runBlocking { kotlinx.coroutines.delay(300) }
         Dispatchers.resetMain()
         Locale.setDefault(defaultLocale)
         stores.closeIfOpen()
@@ -92,7 +94,10 @@ class TaskDetailTest {
 
     private fun ComposeUiTest.showDetails(viewModel: TaskDetailViewModel, onClose: () -> Unit = {}) {
         setContent { AppTheme { Box(Modifier.size(420.dp, 800.dp)) { TaskDetailScreen(viewModel, onClose = onClose) } } }
-        waitFor("details shown") { onAllNodesWithTag("task-detail-title").fetchSemanticsNodes().isNotEmpty() }
+        waitFor("details shown") {
+            onAllNodesWithTag("task-detail-title").fetchSemanticsNodes().isNotEmpty() &&
+                onAllNodesWithTag("task-delete").fetchSemanticsNodes().isNotEmpty()
+        }
     }
 
     private fun ComposeUiTest.undoLast(snackbar: String) {

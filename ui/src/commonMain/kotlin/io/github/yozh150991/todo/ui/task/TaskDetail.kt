@@ -116,6 +116,7 @@ import io.github.yozh150991.todo.ui.tasklist.priorityColor
 import io.github.yozh150991.todo.ui.tasklist.projectTree
 import io.github.yozh150991.todo.ui.tasklist.text
 import io.github.yozh150991.todo.ui.tasklist.zoneCity
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -302,7 +303,10 @@ class TaskDetailViewModel(
                 block()
             } catch (e: ValidationException) {
                 _error.value = if (e.code == ValidationCode.BLANK_CONTENT) UiMessage.BlankContent else UiMessage.NotSaved(e.message)
-            } catch (e: IllegalStateException) {
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Runs past the screen: a failure (the database closed meanwhile) is shown, never thrown.
                 _error.value = UiMessage.DatabaseUnavailable(e.message)
             }
         }
