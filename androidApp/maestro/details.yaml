@@ -29,6 +29,7 @@ appId: io.github.yozh150991.todo.debug
     from:
       text: "Call mom"
     direction: LEFT
-- assertVisible: "Next week"
-- tapOn: "Tomorrow"
+# Each choice is one accessibility node with its date ("Next week, Mon Nov 30"): match the start.
+- assertVisible: "Next week.*"
+- tapOn: "Tomorrow.*"
 - assertVisible: "Date changed: Call mom"
