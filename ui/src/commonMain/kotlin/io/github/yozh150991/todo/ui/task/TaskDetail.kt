@@ -244,6 +244,7 @@ class TaskDetailViewModel(
         if (task.projectId == projectId) return@save
         val move = repository.moveTask(taskId, projectId = projectId) ?: return@save
         val name = repository.projects.get(projectId)?.takeUnless { it.isInbox }?.name
+        _error.value = null
         undo.post(UndoText.Moved(task.content, name)) { repository.undoMove(move) }
     }
 
@@ -254,6 +255,7 @@ class TaskDetailViewModel(
         } else if (repository.complete(taskId)) {
             undo.post(UndoText.Completed(task.content)) { repository.uncomplete(taskId) }
         }
+        _error.value = null
     }
 
     /** To the bin with the sub-tasks; the details close and the list offers Undo. */
@@ -279,19 +281,25 @@ class TaskDetailViewModel(
         val before = live() ?: return
         val edit = change(before) ?: return
         if (repository.updateTask(taskId, edit)) {
+            _error.value = null
             undo.post(text(before.content)) { repository.updateTask(taskId, edit.revertTo(before)) }
         }
     }
 
+    /** The user is typing again: the reason a name was refused goes away. */
+    fun clearError() {
+        _error.value = null
+    }
+
     /**
      * Saves outside the screen's lifetime: a name typed just before Back or "Close" is still
-     * written (the view model is cleared as the details close).
+     * written (the view model is cleared as the details close). An error stays until a change
+     * succeeds — a save that changes nothing (leaving a field untouched) does not hide it.
      */
     private fun save(block: suspend () -> Unit) {
         viewModelScope.launch(NonCancellable) {
             try {
                 block()
-                _error.value = null
             } catch (e: ValidationException) {
                 _error.value = if (e.code == ValidationCode.BLANK_CONTENT) UiMessage.BlankContent else UiMessage.NotSaved(e.message)
             } catch (e: IllegalStateException) {
@@ -417,6 +425,7 @@ private fun TaskEditor(state: TaskDetailUiState.Loaded, viewModel: TaskDetailVie
                         focus.clearFocus()
                     } else {
                         title = value
+                        viewModel.clearError()
                     }
                 },
                 textStyle = MaterialTheme.typography.headlineSmall.copy(
