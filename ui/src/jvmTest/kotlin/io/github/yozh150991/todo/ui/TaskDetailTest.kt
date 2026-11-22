@@ -8,6 +8,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
@@ -15,8 +16,10 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModelStore
 import io.github.yozh150991.todo.core.database.LocalStore
 import io.github.yozh150991.todo.core.database.LocalStoreProvider
 import io.github.yozh150991.todo.core.database.openAppDatabase
@@ -79,6 +82,7 @@ class TaskDetailTest {
 
     @AfterTest
     fun cleanUp() {
+        viewModels.clear()
         // The details save what is typed as they close; let those writes finish before the database goes.
         runBlocking { kotlinx.coroutines.delay(300) }
         Dispatchers.resetMain()
@@ -89,15 +93,26 @@ class TaskDetailTest {
 
     private fun task(id: String): Task = assertNotNull(runBlocking { repository.getTask(id) })
 
+    /** View models made here are cleared after the test, like a screen's when it closes. */
+    private val viewModels = ViewModelStore()
+
+    private fun details(taskId: String): TaskDetailViewModel =
+        TaskDetailViewModel(taskId, repository, undo, days) { zone }.also { viewModels.put(it, it) }
+
     private fun ComposeUiTest.waitFor(what: String, timeoutMillis: Long = 10_000, condition: () -> Boolean) =
         waitUntil(conditionDescription = what, timeoutMillis = timeoutMillis, condition = condition)
 
     private fun ComposeUiTest.showDetails(viewModel: TaskDetailViewModel, onClose: () -> Unit = {}) {
         setContent { AppTheme { Box(Modifier.size(420.dp, 800.dp)) { TaskDetailScreen(viewModel, onClose = onClose) } } }
-        // The first test of a cold JVM also loads fonts and Compose resources, next to a busy build.
-        waitFor("details shown", timeoutMillis = 30_000) {
-            onAllNodesWithTag("task-detail-title").fetchSemanticsNodes().isNotEmpty() &&
-                onAllNodesWithTag("task-delete").fetchSemanticsNodes().isNotEmpty()
+        try {
+            // The first test of a cold JVM also loads fonts and Compose resources, next to a busy build.
+            waitFor("details shown", timeoutMillis = 30_000) {
+                onAllNodesWithTag("task-detail-title").fetchSemanticsNodes().isNotEmpty() &&
+                    onAllNodesWithTag("task-delete").fetchSemanticsNodes().isNotEmpty()
+            }
+        } catch (e: Throwable) {
+            val tree = runCatching { onAllNodes(isRoot(), useUnmergedTree = true).printToString() }.getOrElse { it.toString() }
+            throw AssertionError("details not shown: state=${viewModel.state.value}, error=${viewModel.error.value}\n$tree", e)
         }
     }
 
@@ -109,7 +124,7 @@ class TaskDetailTest {
     @Test
     fun nameIsSavedOnDoneAndUndone() = runComposeUiTest {
         val created = runBlocking { repository.createTask("Buy milk") }
-        showDetails(TaskDetailViewModel(created.id, repository, undo, days) { zone })
+        showDetails(details(created.id))
 
         onNodeWithTag("task-detail-title").performTextReplacement("Buy oat milk")
         onNodeWithTag("task-detail-title").performImeAction()
@@ -124,7 +139,7 @@ class TaskDetailTest {
     @Test
     fun blankNameIsRefused() = runComposeUiTest {
         val created = runBlocking { repository.createTask("Buy milk") }
-        showDetails(TaskDetailViewModel(created.id, repository, undo, days) { zone })
+        showDetails(details(created.id))
 
         onNodeWithTag("task-detail-title").performTextReplacement("   ")
         onNodeWithTag("task-detail-title").performImeAction()
@@ -137,7 +152,7 @@ class TaskDetailTest {
     @Test
     fun typedTextIsSavedWhenTheDetailsClose() = runComposeUiTest {
         val created = runBlocking { repository.createTask("Buy milk") }
-        val viewModel = TaskDetailViewModel(created.id, repository, undo, days) { zone }
+        val viewModel = details(created.id)
         var open by mutableStateOf(true)
         setContent { AppTheme { if (open) TaskDetailScreen(viewModel, onClose = {}) } }
         waitFor("details shown", timeoutMillis = 30_000) { onAllNodesWithTag("task-detail-title").fetchSemanticsNodes().isNotEmpty() }
@@ -151,7 +166,7 @@ class TaskDetailTest {
     @Test
     fun priorityDateTimeAndDeadline() = runComposeUiTest {
         val created = runBlocking { repository.createTask("Buy milk") }
-        showDetails(TaskDetailViewModel(created.id, repository, undo, days) { zone })
+        showDetails(details(created.id))
 
         onNodeWithTag("field-priority").performClick()
         onNodeWithTag("priority-1").performClick()
@@ -194,7 +209,7 @@ class TaskDetailTest {
     @Test
     fun timeInTheDstGapOffersChoices() = runComposeUiTest {
         val created = runBlocking { repository.createTask("Night train", due = Due(LocalDate(2026, 3, 29))) }
-        val viewModel = TaskDetailViewModel(created.id, repository, undo, days) { zone }
+        val viewModel = details(created.id)
         showDetails(viewModel)
 
         viewModel.setTime(LocalTime(2, 30))
@@ -212,7 +227,7 @@ class TaskDetailTest {
         val created = runBlocking { repository.createTask("Buy milk") }
         val home = runBlocking { repository.projects.create("Home") }
         val inboxId = created.projectId
-        showDetails(TaskDetailViewModel(created.id, repository, undo, days) { zone })
+        showDetails(details(created.id))
         waitFor("project field") { onAllNodesWithText("Project: Inbox").fetchSemanticsNodes().isNotEmpty() }
 
         onNodeWithTag("field-project").performClick()
@@ -229,7 +244,7 @@ class TaskDetailTest {
     fun deleteClosesAndUndoRestores() = runComposeUiTest {
         val created = runBlocking { repository.createTask("Buy milk") }
         var closed = false
-        showDetails(TaskDetailViewModel(created.id, repository, undo, days) { zone }, onClose = { closed = true })
+        showDetails(details(created.id), onClose = { closed = true })
 
         onNodeWithTag("task-delete").performClick()
         assertTrue(closed)
@@ -242,7 +257,7 @@ class TaskDetailTest {
     @Test
     fun completeFromTheDetails() = runComposeUiTest {
         val created = runBlocking { repository.createTask("Buy milk") }
-        showDetails(TaskDetailViewModel(created.id, repository, undo, days) { zone })
+        showDetails(details(created.id))
 
         onNodeWithTag("task-detail-complete").performClick()
         waitFor("completed") { task(created.id).completedAt != null }
