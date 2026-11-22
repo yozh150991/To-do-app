@@ -96,7 +96,7 @@ class ListScreensTest {
                 }
             }
         }
-        waitUntil(10_000) { onAllNodesWithText("Water the plants").fetchSemanticsNodes().isNotEmpty() }
+        waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Water the plants").fetchSemanticsNodes().isNotEmpty() }
         onNodeWithText("Overdue").assertExists()
         onNodeWithText("Pay the bill").assertExists()
         onAllNodesWithText("Later").fetchSemanticsNodes().let { assertTrue(it.isEmpty(), "not due today") }
@@ -105,12 +105,12 @@ class ListScreensTest {
         runOnIdle { assertEquals(QuickAddContext(date = today, today = today), contexts.single()) }
 
         onNodeWithContentDescription("Complete “Pay the bill”, priority 4").performClick()
-        waitUntil(10_000) { onAllNodesWithText("Completed: Pay the bill").fetchSemanticsNodes().isNotEmpty() }
-        waitUntil(10_000) { onAllNodesWithText("Overdue").fetchSemanticsNodes().isEmpty() }
+        waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Completed: Pay the bill").fetchSemanticsNodes().isNotEmpty() }
+        waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Overdue").fetchSemanticsNodes().isEmpty() }
         assertNotNull(runBlocking { repository.getTask(overdue.id) }?.completedAt)
 
         onNodeWithText("Undo").performClick()
-        waitUntil(10_000) { onAllNodesWithText("Pay the bill").fetchSemanticsNodes().isNotEmpty() }
+        waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Pay the bill").fetchSemanticsNodes().isNotEmpty() }
         assertNull(runBlocking { repository.getTask(overdue.id) }?.completedAt)
     }
 
@@ -120,12 +120,12 @@ class ListScreensTest {
         runBlocking { repository.createTask("Still open") }
         runBlocking { repository.complete(done.id) }
         setContent { AppTheme { InboxScreen(InboxViewModel(repository, days), onOpenAbout = {}) } }
-        waitUntil(10_000) { onAllNodesWithText("Still open").fetchSemanticsNodes().isNotEmpty() }
+        waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Still open").fetchSemanticsNodes().isNotEmpty() }
         onAllNodesWithText("Already done").fetchSemanticsNodes().let { assertTrue(it.isEmpty(), "completed tasks are hidden") }
 
         onNodeWithTag("menu").performClick()
         onNodeWithTag("menu-show-completed").performClick()
-        waitUntil(10_000) { onAllNodesWithText("Already done").fetchSemanticsNodes().isNotEmpty() }
+        waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Already done").fetchSemanticsNodes().isNotEmpty() }
         onNodeWithText("Completed").assertExists()
     }
 
@@ -145,7 +145,7 @@ class ListScreensTest {
 
     private fun upcomingScroll(viewModel: UpcomingViewModel) = runComposeUiTest {
         setContent { AppTheme { Box(Modifier.size(390.dp, 700.dp)) { UpcomingScreen(viewModel, onAddTask = {}, onOpenTask = {}) } } }
-        waitUntil(30_000) { onAllNodesWithText("Task 0").fetchSemanticsNodes().isNotEmpty() }
+        waitUntil(timeoutMillis = 30_000) { onAllNodesWithText("Task 0").fetchSemanticsNodes().isNotEmpty() }
         val elapsed = measureTime {
             onNodeWithTag("task-list").performScrollToNode(hasText("Task 1999"))
         }
@@ -157,6 +157,6 @@ class ListScreensTest {
         onAllNodesWithTag("day-$emptyDay").fetchSemanticsNodes().let { assertTrue(it.isNotEmpty()) }
         // Near the end of the first 60 days more days were asked for.
         onNodeWithTag("task-list").performScrollToIndex(2_000 + UpcomingViewModel.INITIAL_DAYS - 1)
-        waitUntil(10_000) { viewModel.state.value.days.size > UpcomingViewModel.INITIAL_DAYS }
+        waitUntil(timeoutMillis = 10_000) { viewModel.state.value.days.size > UpcomingViewModel.INITIAL_DAYS }
     }
 }
