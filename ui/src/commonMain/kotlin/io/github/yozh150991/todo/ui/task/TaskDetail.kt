@@ -487,7 +487,7 @@ private fun TaskEditor(state: TaskDetailUiState.Loaded, viewModel: TaskDetailVie
         val due = task.due
         FieldRow(
             icon = Res.drawable.ic_schedule,
-            text = if (due == null) stringResource(Res.string.task_no_date) else stringResource(Res.string.task_due, DayLabel.of(due.date, today).text()),
+            text = if (due == null) stringResource(Res.string.task_no_date) else stringResource(Res.string.task_due, detailDate(due.date, today)),
             tag = "field-date",
             onClick = { scheduling = true },
             clear = if (due == null) null else ClearAction(stringResource(Res.string.task_remove_date), "clear-date") { viewModel.schedule(null) },
@@ -594,6 +594,16 @@ private fun TaskEditor(state: TaskDetailUiState.Loaded, viewModel: TaskDetailVie
             onDismiss = { pickingDeadline = false },
         )
     }
+}
+
+/**
+ * The date in full enough to check at a glance: "Tomorrow", "Mon, Nov 23" (a weekday alone is
+ * ambiguous in the details, unlike in a list), "Nov 30", "Jan 3, 2027".
+ */
+@Composable
+private fun detailDate(date: LocalDate, today: LocalDate): String = when (val label = DayLabel.of(date, today)) {
+    is DayLabel.Weekday -> "${label.text()}, ${DayLabel.shortDate(date, today).text()}"
+    else -> label.text()
 }
 
 private class ClearAction(val description: String, val tag: String, val onClick: () -> Unit)
