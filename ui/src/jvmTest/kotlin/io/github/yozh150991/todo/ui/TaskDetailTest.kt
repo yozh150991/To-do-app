@@ -32,12 +32,7 @@ import io.github.yozh150991.todo.ui.task.TaskDetailScreen
 import io.github.yozh150991.todo.ui.task.TaskDetailViewModel
 import io.github.yozh150991.todo.ui.tasklist.DayTicker
 import io.github.yozh150991.todo.ui.tasklist.UndoCenter
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.resetMain
-import kotlinx.coroutines.test.setMain
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
@@ -59,7 +54,7 @@ import kotlin.time.Instant
  * Editing in the task details (UX_SPEC §3.3, plan Ф1a PR 3b) with a real database, in English:
  * every change saved at once and undoable, a blank name refused, TIME-08 choices, the bin.
  */
-@OptIn(ExperimentalTestApi::class, ExperimentalCoroutinesApi::class)
+@OptIn(ExperimentalTestApi::class)
 class TaskDetailTest {
     private val dir: File = Files.createTempDirectory("details").toFile()
     private val stores = LocalStoreProvider { LocalStore(openAppDatabase(File(dir, "todo.db")).database) }
@@ -74,9 +69,11 @@ class TaskDetailTest {
     ) { zone }
     private val undo = UndoCenter()
 
+    // The view models run on the real main dispatcher (Swing's, as in ScreenshotTest): the details
+    // need no navigation on the test thread, and with a test dispatcher as Main the screen now and
+    // then missed the loaded state of its view model on CI.
     @BeforeTest
     fun setUp() {
-        Dispatchers.setMain(UnconfinedTestDispatcher())
         Locale.setDefault(Locale.ENGLISH)
     }
 
@@ -85,7 +82,6 @@ class TaskDetailTest {
         viewModels.clear()
         // The details save what is typed as they close; let those writes finish before the database goes.
         runBlocking { kotlinx.coroutines.delay(300) }
-        Dispatchers.resetMain()
         Locale.setDefault(defaultLocale)
         stores.closeIfOpen()
         dir.deleteRecursively()
