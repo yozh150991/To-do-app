@@ -576,7 +576,7 @@ private fun TaskEditor(state: TaskDetailUiState.Loaded, viewModel: TaskDetailVie
     if (scheduling) ScheduleSheet(task, today, onPick = viewModel::schedule, onDismiss = { scheduling = false })
     if (pickingTime) {
         TimeDialog(
-            initial = due?.time ?: LocalTime(9, 0),
+            initial = task.due?.time ?: LocalTime(9, 0),
             onPick = {
                 pickingTime = false
                 viewModel.setTime(it)
