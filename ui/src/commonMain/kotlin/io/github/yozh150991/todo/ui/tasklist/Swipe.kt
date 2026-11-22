@@ -69,8 +69,11 @@ import org.jetbrains.compose.resources.stringResource
 import kotlin.math.roundToInt
 import kotlin.time.Instant
 
-/** How far a row must travel, as a share of its width, for a swipe to count (UX_SPEC §4). */
-internal const val SWIPE_THRESHOLD = 0.35f
+/**
+ * How far a row must travel, as a share of its width, for a swipe to count (UX_SPEC §4): a
+ * quarter — about 100 dp on a phone, a deliberate move, while a short drag springs back.
+ */
+internal const val SWIPE_THRESHOLD = 0.25f
 
 private val CompleteColor = Color(0xFF2E7D32)
 private val ScheduleColor = Color(0xFF6A4C93)

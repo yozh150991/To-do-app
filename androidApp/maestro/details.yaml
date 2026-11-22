@@ -3,8 +3,8 @@
 # with Undo, and a swipe left offers the dates.
 #
 # Maestro swipes from the centre of the matched text to 10 % / 90 % of the screen width. The title
-# is long enough to wrap, so its text spans the row and a swipe left travels far enough to count
-# (a short one springs back by design).
+# is long enough to wrap, so its text spans the row and both swipes travel over a third of it —
+# more than the quarter that counts (a short drag springs back by design).
 appId: io.github.yozh150991.todo.debug
 ---
 - launchApp:
