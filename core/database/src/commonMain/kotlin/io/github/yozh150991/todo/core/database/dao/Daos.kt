@@ -103,6 +103,35 @@ interface TaskDao {
     )
     fun observeCompletedInProject(projectId: String): Flow<List<TaskEntity>>
 
+    /**
+     * Today (UX_SPEC §3.1): open tasks due on or before [today], plus open tasks without a date whose
+     * deadline is [today]. Projects in the bin or the archive are left out. Dates are ISO text, so
+     * text comparison is date order. Order: date, timed before all-day, time, priority, list order.
+     */
+    @Query(
+        """
+        SELECT task.* FROM task JOIN project ON project.id = task.project_id
+        WHERE task.deleted_at IS NULL AND task.completed_at IS NULL
+          AND project.deleted_at IS NULL AND project.archived_at IS NULL
+          AND ((task.due_date IS NOT NULL AND task.due_date <= :today)
+               OR (task.due_date IS NULL AND task.deadline = :today))
+        ORDER BY task.due_date, task.due_time IS NULL, task.due_time, task.priority, task.child_order, task.id
+        """,
+    )
+    fun observeToday(today: String): Flow<List<TaskEntity>>
+
+    /** Upcoming: open tasks due between [from] and [to] inclusive, in the same order as [observeToday]. */
+    @Query(
+        """
+        SELECT task.* FROM task JOIN project ON project.id = task.project_id
+        WHERE task.deleted_at IS NULL AND task.completed_at IS NULL
+          AND project.deleted_at IS NULL AND project.archived_at IS NULL
+          AND task.due_date BETWEEN :from AND :to
+        ORDER BY task.due_date, task.due_time IS NULL, task.due_time, task.priority, task.child_order, task.id
+        """,
+    )
+    fun observeDueBetween(from: String, to: String): Flow<List<TaskEntity>>
+
     /** Largest sibling order key at the top level of a project, used to append new tasks. */
     @Query("SELECT MAX(child_order) FROM task WHERE project_id = :projectId AND parent_id IS NULL")
     suspend fun lastTopLevelOrder(projectId: String): String?

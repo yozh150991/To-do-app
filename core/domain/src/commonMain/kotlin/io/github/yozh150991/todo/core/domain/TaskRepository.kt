@@ -83,6 +83,16 @@ class TaskRepository(
 
     fun observePendingOperationCount(): Flow<Int> = flow { emitAll(store().outbox.observePendingCount()) }
 
+    /** Overdue and today's open tasks, plus today's deadlines without a date (UX_SPEC §3.1 «Сьогодні»). */
+    fun observeToday(today: LocalDate): Flow<List<Task>> = flow {
+        emitAll(store().tasks.observeToday(today.toString()).map { rows -> rows.map(TaskEntity::toDomain) })
+    }
+
+    /** Open tasks due from [from] to [to] inclusive (UX_SPEC §3.1 «Майбутні»). */
+    fun observeDueBetween(from: LocalDate, to: LocalDate): Flow<List<Task>> = flow {
+        emitAll(store().tasks.observeDueBetween(from.toString(), to.toString()).map { rows -> rows.map(TaskEntity::toDomain) })
+    }
+
     /** SQLite version, FTS5, journal, schema, quick_check and counts (About dialog, device evidence). */
     suspend fun diagnostics(): DatabaseDiagnostics = store().diagnostics()
 

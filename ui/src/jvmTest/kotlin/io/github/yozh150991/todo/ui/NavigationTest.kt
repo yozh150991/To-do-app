@@ -205,4 +205,41 @@ class NavigationTest {
             assertEquals(QuickAddContext(projectId = "p"), contexts[1])
         }
     }
+
+    /** Browse → a project's tasks → details over the project; Back walks the same way back. */
+    @Test
+    fun browseOpensAProjectAndItsTasks() = runComposeUiTest {
+        lateinit var navController: NavHostController
+        setContent {
+            navController = rememberNavController()
+            AppTheme {
+                Box(Modifier.size(390.dp, 700.dp)) {
+                    AppNavigation(
+                        features = FeatureFlags.Development,
+                        onOpenAbout = {},
+                        inbox = { Text(inbox) },
+                        browse = { slot -> Button(onClick = { slot.openProject("p7") }) { Text("project p7") } },
+                        project = { id, slot, onBack ->
+                            Column {
+                                Text("tasks of $id")
+                                Button(onClick = { slot.openTask("t3") }) { Text("open t3") }
+                                Button(onClick = onBack) { Text("back to browse") }
+                            }
+                        },
+                        taskDetail = { id, _ -> Text("detail $id") },
+                        navController = navController,
+                    )
+                }
+            }
+        }
+        onNodeWithTag("tab-browse").performClick()
+        onNodeWithText("project p7").performClick()
+        onNodeWithText("tasks of p7").assertExists()
+        onNodeWithText("open t3").performClick()
+        onNodeWithText("detail t3").assertExists()
+        runOnIdle { navController.popBackStack() }
+        onNodeWithText("tasks of p7").assertExists()
+        onNodeWithText("back to browse").performClick()
+        onNodeWithText("project p7").assertExists()
+    }
 }
