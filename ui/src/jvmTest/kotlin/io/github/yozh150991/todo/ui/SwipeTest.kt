@@ -78,14 +78,15 @@ class SwipeTest {
 
     private fun task(id: String): Task = assertNotNull(runBlocking { repository.getTask(id) })
 
-    private fun ComposeUiTest.waitFor(what: String, condition: () -> Boolean) =
-        waitUntil(conditionDescription = what, timeoutMillis = 10_000, condition = condition)
+    private fun ComposeUiTest.waitFor(what: String, timeoutMillis: Long = 10_000, condition: () -> Boolean) =
+        waitUntil(conditionDescription = what, timeoutMillis = timeoutMillis, condition = condition)
 
     private fun ComposeUiTest.showInbox(vararg titles: String) {
         setContent {
             AppTheme { Box(Modifier.size(400.dp, 700.dp)) { InboxScreen(InboxViewModel(repository, days, UndoCenter()), onOpenAbout = {}) } }
         }
-        waitFor("rows shown") { titles.all { onAllNodesWithText(it).fetchSemanticsNodes().isNotEmpty() } }
+        // The first test of a cold JVM also loads fonts and Compose resources, next to a busy build.
+        waitFor("rows shown", timeoutMillis = 30_000) { titles.all { onAllNodesWithText(it).fetchSemanticsNodes().isNotEmpty() } }
     }
 
     @Test

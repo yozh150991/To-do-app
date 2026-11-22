@@ -89,12 +89,13 @@ class TaskDetailTest {
 
     private fun task(id: String): Task = assertNotNull(runBlocking { repository.getTask(id) })
 
-    private fun ComposeUiTest.waitFor(what: String, condition: () -> Boolean) =
-        waitUntil(conditionDescription = what, timeoutMillis = 10_000, condition = condition)
+    private fun ComposeUiTest.waitFor(what: String, timeoutMillis: Long = 10_000, condition: () -> Boolean) =
+        waitUntil(conditionDescription = what, timeoutMillis = timeoutMillis, condition = condition)
 
     private fun ComposeUiTest.showDetails(viewModel: TaskDetailViewModel, onClose: () -> Unit = {}) {
         setContent { AppTheme { Box(Modifier.size(420.dp, 800.dp)) { TaskDetailScreen(viewModel, onClose = onClose) } } }
-        waitFor("details shown") {
+        // The first test of a cold JVM also loads fonts and Compose resources, next to a busy build.
+        waitFor("details shown", timeoutMillis = 30_000) {
             onAllNodesWithTag("task-detail-title").fetchSemanticsNodes().isNotEmpty() &&
                 onAllNodesWithTag("task-delete").fetchSemanticsNodes().isNotEmpty()
         }
@@ -139,7 +140,7 @@ class TaskDetailTest {
         val viewModel = TaskDetailViewModel(created.id, repository, undo, days) { zone }
         var open by mutableStateOf(true)
         setContent { AppTheme { if (open) TaskDetailScreen(viewModel, onClose = {}) } }
-        waitFor("details shown") { onAllNodesWithTag("task-detail-title").fetchSemanticsNodes().isNotEmpty() }
+        waitFor("details shown", timeoutMillis = 30_000) { onAllNodesWithTag("task-detail-title").fetchSemanticsNodes().isNotEmpty() }
 
         onNodeWithTag("task-detail-title").performTextReplacement("Buy milk and bread")
         onNodeWithTag("task-detail-description").performTextReplacement("2 litres")
