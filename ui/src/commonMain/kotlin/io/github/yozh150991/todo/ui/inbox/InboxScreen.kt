@@ -21,11 +21,14 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.yozh150991.todo.core.model.Task
 import io.github.yozh150991.todo.core.model.TimeZones
 import io.github.yozh150991.todo.ui.quickadd.AddTaskButton
 import io.github.yozh150991.todo.ui.quickadd.QuickAddContext
@@ -42,11 +45,13 @@ import io.github.yozh150991.todo.ui.resources.error_not_saved
 import io.github.yozh150991.todo.ui.resources.ic_back
 import io.github.yozh150991.todo.ui.resources.inbox_title
 import io.github.yozh150991.todo.ui.resources.pending_sync
-import io.github.yozh150991.todo.ui.tasklist.CompletionSnackbars
 import io.github.yozh150991.todo.ui.tasklist.ListHeader
+import io.github.yozh150991.todo.ui.tasklist.ScheduleSheet
 import io.github.yozh150991.todo.ui.tasklist.ShowCompletedMenu
+import io.github.yozh150991.todo.ui.tasklist.SwipeableTaskRow
 import io.github.yozh150991.todo.ui.tasklist.TaskItem
 import io.github.yozh150991.todo.ui.tasklist.TaskRow
+import io.github.yozh150991.todo.ui.tasklist.UndoSnackbars
 import kotlinx.datetime.todayIn
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
@@ -97,7 +102,8 @@ fun ProjectTasksScreen(
     val snackbar = remember { SnackbarHostState() }
     val fallbackToday = remember { Clock.System.todayIn(TimeZones.systemDefault()) }
     val today = state.today ?: fallbackToday
-    CompletionSnackbars(viewModel.events, snackbar, onUndo = viewModel::uncomplete)
+    UndoSnackbars(viewModel.undo, snackbar)
+    var scheduling by remember { mutableStateOf<Task?>(null) }
 
     Scaffold(
         modifier = modifier,
@@ -146,12 +152,13 @@ fun ProjectTasksScreen(
             // Room under the last row for the "+" button.
             LazyColumn(modifier = Modifier.fillMaxSize().testTag("task-list"), contentPadding = PaddingValues(bottom = 88.dp)) {
                 items(state.items, key = { it.task.id }) { item ->
-                    TaskRow(
+                    SwipeableTaskRow(
                         item = item,
                         today = today,
                         selected = item.task.id == selectedTaskId,
                         onOpen = { onOpenTask(item.task.id) },
                         onToggle = { viewModel.toggle(item.task) },
+                        onSchedule = { scheduling = item.task },
                     )
                     HorizontalDivider()
                 }
@@ -170,6 +177,9 @@ fun ProjectTasksScreen(
                 }
             }
         }
+    }
+    scheduling?.let { task ->
+        ScheduleSheet(task, today, onPick = { viewModel.schedule(task, it) }, onDismiss = { scheduling = null })
     }
 }
 

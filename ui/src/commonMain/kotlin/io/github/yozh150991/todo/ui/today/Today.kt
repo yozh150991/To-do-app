@@ -16,7 +16,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -36,18 +38,18 @@ import io.github.yozh150991.todo.ui.resources.group_overdue
 import io.github.yozh150991.todo.ui.resources.group_today
 import io.github.yozh150991.todo.ui.resources.inbox_title
 import io.github.yozh150991.todo.ui.resources.tab_today
-import io.github.yozh150991.todo.ui.tasklist.CompletionSnackbars
 import io.github.yozh150991.todo.ui.tasklist.DayLabel
 import io.github.yozh150991.todo.ui.tasklist.DayTicker
-import io.github.yozh150991.todo.ui.tasklist.ListEvent
 import io.github.yozh150991.todo.ui.tasklist.ListHeader
 import io.github.yozh150991.todo.ui.tasklist.TaskActions
 import io.github.yozh150991.todo.ui.tasklist.TaskItem
-import io.github.yozh150991.todo.ui.tasklist.TaskRow
+import io.github.yozh150991.todo.ui.tasklist.ScheduleSheet
+import io.github.yozh150991.todo.ui.tasklist.SwipeableTaskRow
+import io.github.yozh150991.todo.ui.tasklist.UndoCenter
+import io.github.yozh150991.todo.ui.tasklist.UndoSnackbars
 import io.github.yozh150991.todo.ui.tasklist.text
 import io.github.yozh150991.todo.ui.tasklist.weekdayName
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
@@ -91,9 +93,12 @@ data class TodayUiState(
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class TodayViewModel(private val repository: TaskRepository, days: DayTicker) : ViewModel() {
-    private val actions = TaskActions(repository, viewModelScope)
-    val events: SharedFlow<ListEvent> = actions.events
+class TodayViewModel(
+    private val repository: TaskRepository,
+    days: DayTicker,
+    val undo: UndoCenter = UndoCenter(),
+) : ViewModel() {
+    private val actions = TaskActions(repository, viewModelScope, undo)
     val error: StateFlow<UiMessage?> = actions.error
 
     val state: StateFlow<TodayUiState> = days.today
@@ -112,7 +117,7 @@ class TodayViewModel(private val repository: TaskRepository, days: DayTicker) : 
 
     fun toggle(task: Task) = actions.toggle(task)
 
-    fun uncomplete(taskId: String) = actions.uncomplete(taskId)
+    fun schedule(task: Task, date: LocalDate?) = actions.schedule(task, date)
 }
 
 /** Today (UX_SPEC §3.1): overdue first, then today, then today's deadlines; "+" adds for today. */
@@ -128,7 +133,8 @@ fun TodayScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val failed by viewModel.error.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
-    CompletionSnackbars(viewModel.events, snackbar, onUndo = viewModel::uncomplete)
+    UndoSnackbars(viewModel.undo, snackbar)
+    var scheduling by remember { mutableStateOf<Task?>(null) }
     val today = state.today
     val inbox = stringResource(Res.string.inbox_title)
 
@@ -174,13 +180,14 @@ fun TodayScreen(
                         ListHeader(title(), color = if (error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
                     }
                     items(tasks, key = { "$key-${it.id}" }) { task ->
-                        TaskRow(
+                        SwipeableTaskRow(
                             item = TaskItem(task),
                             today = today,
                             projectName = state.projectNames[task.projectId] ?: inbox,
                             selected = task.id == selectedTaskId,
                             onOpen = { onOpenTask(task.id) },
                             onToggle = { viewModel.toggle(task) },
+                            onSchedule = { scheduling = task },
                         )
                         HorizontalDivider()
                     }
@@ -190,5 +197,9 @@ fun TodayScreen(
                 section("deadline", { stringResource(Res.string.group_deadline_today) }, state.groups.deadlineToday)
             }
         }
+    }
+    val scheduled = scheduling
+    if (scheduled != null && today != null) {
+        ScheduleSheet(scheduled, today, onPick = { viewModel.schedule(scheduled, it) }, onDismiss = { scheduling = null })
     }
 }

@@ -40,6 +40,7 @@ import io.github.yozh150991.todo.ui.FeatureFlags
 import kotlinx.coroutines.flow.first
 import kotlinx.datetime.LocalDate
 import io.github.yozh150991.todo.ui.quickadd.QuickAddContext
+import io.github.yozh150991.todo.ui.tasklist.LocalDetailBesideList
 import io.github.yozh150991.todo.ui.resources.Res
 import io.github.yozh150991.todo.ui.resources.ic_tab_browse
 import io.github.yozh150991.todo.ui.resources.ic_tab_inbox
@@ -233,7 +234,10 @@ fun AppNavigation(
                             }
                             VerticalDivider()
                             Box(Modifier.width(DetailPaneWidth).fillMaxHeight().testTag("detail-pane")) {
-                                taskDetail(taskId, close)
+                                // The list beside shows the snackbars (one host for the one pending Undo).
+                                CompositionLocalProvider(LocalDetailBesideList provides true) {
+                                    taskDetail(taskId, close)
+                                }
                             }
                         }
                     } else {

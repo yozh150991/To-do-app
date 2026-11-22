@@ -186,7 +186,8 @@ class ScreenshotTest {
                 deadline = LocalDate(2026, 11, 30),
             )
         }
-        val viewModel = TaskDetailViewModel(task.id, repository)
+        // A fixed today: "Date: tomorrow" and the days left to the deadline stay the same.
+        val viewModel = TaskDetailViewModel(task.id, repository, days = fixedDays)
         runComposeUiTest {
             setContent {
                 AppTheme {
@@ -210,7 +211,7 @@ class ScreenshotTest {
         // and needs that thread to be the main one (as in NavigationTest).
         Dispatchers.setMain(UnconfinedTestDispatcher())
         val inboxViewModel = InboxViewModel(repository)
-        val detailViewModel = TaskDetailViewModel(opened.id, repository)
+        val detailViewModel = TaskDetailViewModel(opened.id, repository, days = fixedDays)
         try {
             listDetail(tasks.map { it.content }, opened.id, inboxViewModel, detailViewModel)
         } finally {

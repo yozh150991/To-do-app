@@ -89,4 +89,29 @@
         <item quantity="one">%1$d day</item>
         <item quantity="other">%1$d days</item>
     </plurals>
+    <string name="snackbar_binned">Moved to bin: %1$s</string>
+    <string name="snackbar_updated">Changed: %1$s</string>
+    <string name="snackbar_scheduled">Date changed: %1$s</string>
+    <string name="snackbar_moved">Moved to %2$s: %1$s</string>
+    <string name="snackbar_undo_failed">Could not undo. %1$s</string>
+    <string name="action_complete">Complete</string>
+    <string name="action_schedule">Schedule</string>
+    <string name="schedule_title">Schedule “%1$s”</string>
+    <string name="schedule_today">Today</string>
+    <string name="schedule_tomorrow">Tomorrow</string>
+    <string name="schedule_next_week">Next week</string>
+    <string name="schedule_no_date">No date</string>
+    <string name="schedule_pick">Pick a date…</string>
+    <string name="ok">OK</string>
+    <string name="cancel">Cancel</string>
+    <string name="task_title_hint">Task name</string>
+    <string name="task_description_hint">Description</string>
+    <string name="task_time">Time: %1$s</string>
+    <string name="task_add_time">Add time</string>
+    <string name="task_remove_time">Remove time</string>
+    <string name="task_remove_date">Remove date</string>
+    <string name="task_add_deadline">Add deadline</string>
+    <string name="task_remove_deadline">Remove deadline</string>
+    <string name="task_delete">Delete</string>
+    <string name="task_time_gap">%1$s does not exist on that day: the clocks go forward. Choose another time:</string>
 </resources>

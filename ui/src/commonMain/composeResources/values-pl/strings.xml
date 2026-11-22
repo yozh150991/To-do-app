@@ -90,4 +90,29 @@
         <item quantity="many">%1$d dni</item>
         <item quantity="other">%1$d dnia</item>
     </plurals>
+    <string name="snackbar_binned">W koszu: %1$s</string>
+    <string name="snackbar_updated">Zmieniono: %1$s</string>
+    <string name="snackbar_scheduled">Zmieniono datę: %1$s</string>
+    <string name="snackbar_moved">Przeniesiono do „%2$s”: %1$s</string>
+    <string name="snackbar_undo_failed">Nie udało się cofnąć. %1$s</string>
+    <string name="action_complete">Ukończ</string>
+    <string name="action_schedule">Zaplanuj</string>
+    <string name="schedule_title">Zaplanuj „%1$s”</string>
+    <string name="schedule_today">Dzisiaj</string>
+    <string name="schedule_tomorrow">Jutro</string>
+    <string name="schedule_next_week">W przyszłym tygodniu</string>
+    <string name="schedule_no_date">Bez daty</string>
+    <string name="schedule_pick">Wybierz datę…</string>
+    <string name="ok">OK</string>
+    <string name="cancel">Anuluj</string>
+    <string name="task_title_hint">Nazwa zadania</string>
+    <string name="task_description_hint">Opis</string>
+    <string name="task_time">Godzina: %1$s</string>
+    <string name="task_add_time">Dodaj godzinę</string>
+    <string name="task_remove_time">Usuń godzinę</string>
+    <string name="task_remove_date">Usuń datę</string>
+    <string name="task_add_deadline">Dodaj termin</string>
+    <string name="task_remove_deadline">Usuń termin</string>
+    <string name="task_delete">Usuń</string>
+    <string name="task_time_gap">Godziny %1$s tego dnia nie ma: zegary przestawia się do przodu. Wybierz inną godzinę:</string>
 </resources>

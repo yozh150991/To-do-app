@@ -90,4 +90,29 @@
         <item quantity="many">%1$d днів</item>
         <item quantity="other">%1$d дня</item>
     </plurals>
+    <string name="snackbar_binned">У кошику: %1$s</string>
+    <string name="snackbar_updated">Змінено: %1$s</string>
+    <string name="snackbar_scheduled">Дату змінено: %1$s</string>
+    <string name="snackbar_moved">Перенесено в «%2$s»: %1$s</string>
+    <string name="snackbar_undo_failed">Не вдалося скасувати. %1$s</string>
+    <string name="action_complete">Виконати</string>
+    <string name="action_schedule">Запланувати</string>
+    <string name="schedule_title">Запланувати «%1$s»</string>
+    <string name="schedule_today">Сьогодні</string>
+    <string name="schedule_tomorrow">Завтра</string>
+    <string name="schedule_next_week">Наступного тижня</string>
+    <string name="schedule_no_date">Без дати</string>
+    <string name="schedule_pick">Вибрати дату…</string>
+    <string name="ok">OK</string>
+    <string name="cancel">Скасувати</string>
+    <string name="task_title_hint">Назва задачі</string>
+    <string name="task_description_hint">Опис</string>
+    <string name="task_time">Час: %1$s</string>
+    <string name="task_add_time">Додати час</string>
+    <string name="task_remove_time">Прибрати час</string>
+    <string name="task_remove_date">Прибрати дату</string>
+    <string name="task_add_deadline">Додати дедлайн</string>
+    <string name="task_remove_deadline">Прибрати дедлайн</string>
+    <string name="task_delete">Видалити</string>
+    <string name="task_time_gap">Цього дня %1$s немає: годинник переводять уперед. Виберіть інший час:</string>
 </resources>

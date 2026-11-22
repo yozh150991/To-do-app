@@ -19,7 +19,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -27,6 +29,8 @@ import androidx.compose.ui.unit.dp
 import io.github.yozh150991.todo.core.model.Priority
 import io.github.yozh150991.todo.core.model.Task
 import io.github.yozh150991.todo.ui.resources.Res
+import io.github.yozh150991.todo.ui.resources.action_complete
+import io.github.yozh150991.todo.ui.resources.action_schedule
 import io.github.yozh150991.todo.ui.resources.complete_task
 import io.github.yozh150991.todo.ui.resources.deadline_label
 import io.github.yozh150991.todo.ui.resources.has_description
@@ -84,15 +88,25 @@ fun TaskRow(
     modifier: Modifier = Modifier,
     projectName: String? = null,
     selected: Boolean = false,
+    /** Swipe left's action for TalkBack (UX_SPEC §4); null: the row has no such action. */
+    onSchedule: (() -> Unit)? = null,
 ) {
     val task = item.task
     val background = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface
+    val completeLabel = stringResource(Res.string.action_complete)
+    val scheduleLabel = stringResource(Res.string.action_schedule)
     Row(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
             .background(background)
             .clickable(onClick = onOpen)
+            .semantics {
+                customActions = buildList {
+                    if (!task.isCompleted) add(CustomAccessibilityAction(completeLabel) { onToggle(); true })
+                    if (onSchedule != null) add(CustomAccessibilityAction(scheduleLabel) { onSchedule(); true })
+                }
+            }
             .padding(start = 8.dp + 24.dp * item.depth, end = 16.dp, top = 4.dp, bottom = 4.dp)
             .testTag("task-row-${task.id}"),
         verticalAlignment = Alignment.CenterVertically,
