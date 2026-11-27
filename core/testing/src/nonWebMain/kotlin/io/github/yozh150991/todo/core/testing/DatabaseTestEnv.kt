@@ -67,3 +67,13 @@ fun V1Database.create(path: String, journalWal: Boolean = false) {
         seedStatements.forEach { Sql.exec(connection, it) }
     }
 }
+
+/** Builds a genuine schema v2 database file (what v0.0.1/v0.0.2 ship) and seeds it. */
+fun V2Database.create(path: String) {
+    Sql.with(path) { connection ->
+        Sql.texts(connection, "PRAGMA journal_mode = WAL")
+        SchemaV2Fixture.statements.forEach { Sql.exec(connection, it) }
+        Sql.exec(connection, "PRAGMA user_version = ${SchemaV2Fixture.VERSION}")
+        seedStatements.forEach { Sql.exec(connection, it) }
+    }
+}

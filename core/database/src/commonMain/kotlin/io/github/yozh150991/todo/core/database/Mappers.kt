@@ -1,11 +1,15 @@
 package io.github.yozh150991.todo.core.database
 
+import io.github.yozh150991.todo.core.database.entity.DeferredTodoistNodeEntity
 import io.github.yozh150991.todo.core.database.entity.ExternalIdentityEntity
 import io.github.yozh150991.todo.core.database.entity.LocalWorkspaceEntity
 import io.github.yozh150991.todo.core.database.entity.OutboxOperationEntity
 import io.github.yozh150991.todo.core.database.entity.ProjectEntity
+import io.github.yozh150991.todo.core.database.entity.ReminderDeliveryEntity
+import io.github.yozh150991.todo.core.database.entity.ReminderEntity
 import io.github.yozh150991.todo.core.database.entity.TaskEntity
 import io.github.yozh150991.todo.core.model.ClaimStatus
+import io.github.yozh150991.todo.core.model.DeferredTodoistNode
 import io.github.yozh150991.todo.core.model.Due
 import io.github.yozh150991.todo.core.model.EntityType
 import io.github.yozh150991.todo.core.model.ExternalIdentity
@@ -16,6 +20,10 @@ import io.github.yozh150991.todo.core.model.OutboxStatus
 import io.github.yozh150991.todo.core.model.Priority
 import io.github.yozh150991.todo.core.model.Project
 import io.github.yozh150991.todo.core.model.RecurrenceEndReason
+import io.github.yozh150991.todo.core.model.Reminder
+import io.github.yozh150991.todo.core.model.ReminderDelivery
+import io.github.yozh150991.todo.core.model.ReminderScope
+import io.github.yozh150991.todo.core.model.ReminderType
 import io.github.yozh150991.todo.core.model.Task
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
@@ -44,6 +52,7 @@ fun TaskEntity.toDomain(): Task = Task(
     },
     deadline = deadline?.let(LocalDate::parse),
     durationMinutes = durationMin,
+    durationDays = durationDays,
     isCompletable = isCompletable,
     completedAt = completedAt?.toInstant(),
     recurrenceEndReason = RecurrenceEndReason.fromWire(recurrenceEndReason),
@@ -83,6 +92,7 @@ fun Task.toEntity(existing: TaskEntity? = null): TaskEntity = TaskEntity(
     recurrenceIntervalN = existing?.recurrenceIntervalN,
     recurrencePolicyVersion = existing?.recurrencePolicyVersion,
     durationMin = durationMinutes,
+    durationDays = durationDays,
     completedAt = completedAt?.toEpochMilliseconds(),
     isCompletable = isCompletable,
     revision = revision,
@@ -170,4 +180,86 @@ fun ExternalIdentity.toEntity(): ExternalIdentityEntity = ExternalIdentityEntity
     sourceHash = sourceHash,
     importVersion = importVersion,
     lastSeenAt = lastSeenAt.toEpochMilliseconds(),
+)
+
+fun ReminderEntity.toDomain(): Reminder = Reminder(
+    id = id,
+    taskId = taskId,
+    type = ReminderType.fromWire(type),
+    scope = ReminderScope.fromWire(scope),
+    occurrenceId = occurrenceId,
+    remindAt = remindAt?.toInstant(),
+    offsetMinutes = offsetMin,
+    enabled = enabled,
+    isAuto = isAuto,
+    repeatRule = repeatRule,
+    stopOnTaskComplete = stopOnTaskComplete,
+    revision = revision,
+    createdAt = createdAt.toInstant(),
+    updatedAt = updatedAt.toInstant(),
+    deletedAt = deletedAt?.toInstant(),
+)
+
+fun Reminder.toEntity(): ReminderEntity = ReminderEntity(
+    id = id,
+    taskId = taskId,
+    type = type.wire,
+    scope = scope.wire,
+    occurrenceId = occurrenceId,
+    remindAt = remindAt?.toEpochMilliseconds(),
+    offsetMin = offsetMinutes,
+    enabled = enabled,
+    isAuto = isAuto,
+    repeatRule = repeatRule,
+    stopOnTaskComplete = stopOnTaskComplete,
+    revision = revision,
+    createdAt = createdAt.toEpochMilliseconds(),
+    updatedAt = updatedAt.toEpochMilliseconds(),
+    deletedAt = deletedAt?.toEpochMilliseconds(),
+)
+
+fun ReminderDeliveryEntity.toDomain(): ReminderDelivery = ReminderDelivery(
+    id = id,
+    reminderId = reminderId,
+    occurrenceId = occurrenceId,
+    deviceId = deviceId,
+    plannedAt = plannedAt.toInstant(),
+    firedAt = firedAt?.toInstant(),
+    snoozedUntil = snoozedUntil?.toInstant(),
+    dismissedAt = dismissedAt?.toInstant(),
+)
+
+fun ReminderDelivery.toEntity(): ReminderDeliveryEntity = ReminderDeliveryEntity(
+    id = id,
+    reminderId = reminderId,
+    occurrenceId = occurrenceId,
+    deviceId = deviceId,
+    plannedAt = plannedAt.toEpochMilliseconds(),
+    firedAt = firedAt?.toEpochMilliseconds(),
+    snoozedUntil = snoozedUntil?.toEpochMilliseconds(),
+    dismissedAt = dismissedAt?.toEpochMilliseconds(),
+)
+
+fun DeferredTodoistNodeEntity.toDomain(): DeferredTodoistNode = DeferredTodoistNode(
+    sourceId = sourceId,
+    sourceParentId = sourceParentId,
+    sourceProjectId = sourceProjectId,
+    sourceSectionId = sourceSectionId,
+    rootRecurringSourceId = rootRecurringSourceId,
+    depth = depth,
+    deferredReason = deferredReason,
+    sourceHash = sourceHash,
+    importRunId = importRunId,
+)
+
+fun DeferredTodoistNode.toEntity(): DeferredTodoistNodeEntity = DeferredTodoistNodeEntity(
+    sourceId = sourceId,
+    sourceParentId = sourceParentId,
+    sourceProjectId = sourceProjectId,
+    sourceSectionId = sourceSectionId,
+    rootRecurringSourceId = rootRecurringSourceId,
+    depth = depth,
+    deferredReason = deferredReason,
+    sourceHash = sourceHash,
+    importRunId = importRunId,
 )

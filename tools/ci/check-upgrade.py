@@ -16,10 +16,45 @@ expected_version = int(re.search(r"SCHEMA_VERSION = (\d+)", source).group(1))
 problems = []
 
 
+MAGIC = {
+    "todo.db": [b"SQLite format 3\x00"],
+    # WAL header magic, big-endian 0x377f0682 / 0x377f0683 (sqlite.org/fileformat2.html#walformat).
+    "todo.db-wal": [b"\x37\x7f\x06\x82", b"\x37\x7f\x06\x83"],
+}
+
+
+def normalize(directory):
+    """Checks what `adb exec-out run-as … cat` produced before SQLite opens it.
+
+    `exec-out` mixes anything `run-as` prints into the file, so a warning would turn a valid database
+    into "file is not a database". Text in front of the header is cut off and shown; a file without a
+    header at all is reported with its first bytes. The -shm file is dropped: SQLite rebuilds it from
+    the WAL, and a copy taken from another process is never needed.
+    """
+    shm = os.path.join(directory, "todo.db-shm")
+    if os.path.exists(shm):
+        os.remove(shm)
+    for name, magics in MAGIC.items():
+        path = os.path.join(directory, name)
+        if not os.path.exists(path):
+            continue
+        data = open(path, "rb").read()
+        offsets = [o for o in (data.find(m) for m in magics) if o >= 0]
+        if not offsets:
+            problems.append(f"{directory}/{name}: {len(data)} bytes without a SQLite header, starts with {data[:160]!r}")
+            os.rename(path, path + ".invalid")
+            continue
+        offset = min(offsets)
+        if offset > 0:
+            print(f"{directory}/{name}: removed {offset} bytes printed before the header: {data[:offset]!r}")
+            open(path, "wb").write(data[offset:])
+
+
 def inspect(directory):
+    normalize(directory)
     path = os.path.join(directory, "todo.db")
     if not os.path.exists(path):
-        problems.append(f"{directory}: no database file was created")
+        problems.append(f"{directory}: no valid database file was pulled")
         return None
     con = sqlite3.connect(path)
     tables = [r[0] for r in con.execute(
@@ -67,5 +102,9 @@ if problems:
     print("UPGRADE CHECK FAILED")
     for p in problems:
         print(" - " + p)
+    for directory in (before_dir, after_dir):
+        listing = os.path.join(directory, "listing.txt")
+        if os.path.exists(listing):
+            print(f"{listing}:\n{open(listing, errors='replace').read()}")
     sys.exit(1)
 print("UPGRADE CHECK PASSED: install -r kept workspace, Inbox and all rows")

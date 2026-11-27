@@ -118,10 +118,10 @@ test('tasks persist in OPFS across reload and a new tab', async ({ page, context
     lines.push(`verify after reload: ${verify.status} ${JSON.stringify(verify.json)}`);
     expect(verify.status, JSON.stringify(verify.json)).toBe('pass');
 
-    // Schema upgrade in the browser: a genuine v1 file opened by the v2 Room database.
+    // Schema upgrade in the browser: a genuine v1 file opened by the current Room database (v1 → v2 → v3).
     await leave(page);
     const migrate = await selfTest(page, 'selftest=migrate');
-    lines.push(`migration v1 -> v2: ${migrate.status} ${JSON.stringify(migrate.json)}`);
+    lines.push(`migration v1 -> current: ${migrate.status} ${JSON.stringify(migrate.json)}`);
     expect(migrate.status, JSON.stringify(migrate.json)).toBe('pass');
 
     // A new tab after the old one is closed takes over the database.

@@ -13,9 +13,16 @@ import io.github.yozh150991.todo.core.database.UpgradeFault
 import io.github.yozh150991.todo.core.database.entity.SectionEntity
 import io.github.yozh150991.todo.core.database.diagnostics
 import io.github.yozh150991.todo.core.database.inspect
+import io.github.yozh150991.todo.core.database.toDomain
+import io.github.yozh150991.todo.core.database.toEntity
 import io.github.yozh150991.todo.core.domain.TaskRepository
+import io.github.yozh150991.todo.core.model.DeferredTodoistNode
 import io.github.yozh150991.todo.core.model.IdGenerator
 import io.github.yozh150991.todo.core.model.RandomUuidGenerator
+import io.github.yozh150991.todo.core.model.Reminder
+import io.github.yozh150991.todo.core.model.ReminderType
+import io.github.yozh150991.todo.core.model.ValidationException
+import kotlin.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -204,7 +211,72 @@ object DatabaseScenarios {
         val repo = TaskRepository(store)
         repo.createTask("Після міграції")
         assertEquals(V1Database.SEEDED_LOCAL_SEQ + 1, store.outbox.all().maxOf { it.localSeq })
-        env.log("[${env.platform}] v1->v2 migration: counts preserved $before, snapshot verified")
+        env.log("[${env.platform}] v1->v${AppDatabase.SCHEMA_VERSION} migration: counts preserved $before, snapshot verified")
+        result.database.close()
+    }
+
+    /**
+     * v2 → v3 on a genuine v2 file — the upgrade the owner's phone makes from v0.0.2 to Ф1a builds:
+     * every v2 row (including sections, labels and minute durations) survives, the three new tables
+     * start empty, the new foreign key and the duration rule hold, and the outbox continues.
+     */
+    suspend fun migrationFromV2PreservesData(env: DatabaseTestEnv) {
+        val path = env.path("todo.db")
+        V2Database.create(path)
+        val before = counts(path)
+        assertEquals(V2Database.expectedCounts, before)
+
+        val result = opener(env, path).open()
+        assertEquals(2, result.upgradedFrom)
+        val snapshot = assertNotNull(result.snapshotPath)
+        assertEquals(before, DatabaseOpener.readManifestTableCounts(snapshot))
+        assertEquals(2, userVersion(snapshot), "Snapshot keeps the v2 schema")
+
+        val after = result.database.inspect()
+        assertEquals(AppDatabase.SCHEMA_VERSION, after.userVersion)
+        assertEquals("ok", after.integrity)
+        before.forEach { (table, n) -> assertEquals(n, after.tableCounts[table], "rows in $table") }
+        listOf("reminder", "reminder_delivery", "deferred_todoist_node").forEach { table ->
+            assertEquals(0L, after.tableCounts[table], "new table $table starts empty")
+        }
+
+        val store = LocalStore(result.database)
+        val t2 = assertNotNull(store.tasks.getById("t2"))
+        assertEquals(30, t2.durationMin)
+        assertNull(t2.durationDays)
+        assertEquals("s1", t2.sectionId)
+        assertEquals("Europe/Warsaw", t2.dueTz)
+        assertEquals("t2", store.tasks.getById("t3")?.parentId)
+        assertEquals(listOf("l1"), store.labels.labelIdsForTask("t2"))
+
+        // New in v3: reminders reference a task; a duration in days replaces the minutes (ADR-005).
+        val now = Instant.fromEpochMilliseconds(5000)
+        val orphan = runCatching {
+            store.reminders.insert(
+                Reminder(id = "r0", taskId = "missing", type = ReminderType.RELATIVE, offsetMinutes = 0, createdAt = now, updatedAt = now).toEntity(),
+            )
+        }
+        assertTrue(orphan.isFailure, "reminder.task_id must reference an existing task")
+        store.reminders.insert(
+            Reminder(id = "r1", taskId = "t2", type = ReminderType.RELATIVE, offsetMinutes = 0, isAuto = true, createdAt = now, updatedAt = now).toEntity(),
+        )
+        assertEquals(listOf("r1"), store.reminders.forTask("t2").map { it.id })
+        assertFailsWith<ValidationException> { t2.copy(durationDays = 3).toDomain() }
+        store.tasks.update(t2.copy(durationMin = null, durationDays = 3))
+        assertEquals(3, store.tasks.getById("t2")?.toDomain()?.durationDays)
+        store.deferredTodoistNodes.insertAll(
+            listOf(
+                DeferredTodoistNode("8Xr1", null, "p1", null, "8Xr1", 0, DeferredTodoistNode.REASON_RECURRING_ROOT, "h1", "run-1").toEntity(),
+                DeferredTodoistNode("8Xr2", "8Xr1", "p1", null, "8Xr1", 1, DeferredTodoistNode.REASON_DESCENDANT_OF_RECURRING, "h2", "run-1").toEntity(),
+            ),
+        )
+        assertEquals(1, store.deferredTodoistNodes.rootCount())
+
+        val repo = TaskRepository(store)
+        assertEquals(V2Database.WORKSPACE_ID, repo.workspace().workspaceId)
+        repo.createTask("Після міграції v3")
+        assertEquals(V2Database.SEEDED_LOCAL_SEQ + 1, store.outbox.all().maxOf { it.localSeq })
+        env.log("[${env.platform}] v2->v${AppDatabase.SCHEMA_VERSION} migration: counts preserved $before, new tables empty, snapshot verified")
         result.database.close()
     }
 

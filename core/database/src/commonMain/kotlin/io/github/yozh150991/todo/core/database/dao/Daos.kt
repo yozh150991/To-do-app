@@ -4,11 +4,14 @@ import androidx.room3.Dao
 import androidx.room3.Insert
 import androidx.room3.Query
 import androidx.room3.Update
+import io.github.yozh150991.todo.core.database.entity.DeferredTodoistNodeEntity
 import io.github.yozh150991.todo.core.database.entity.ExternalIdentityEntity
 import io.github.yozh150991.todo.core.database.entity.LabelEntity
 import io.github.yozh150991.todo.core.database.entity.LocalWorkspaceEntity
 import io.github.yozh150991.todo.core.database.entity.OutboxOperationEntity
 import io.github.yozh150991.todo.core.database.entity.ProjectEntity
+import io.github.yozh150991.todo.core.database.entity.ReminderDeliveryEntity
+import io.github.yozh150991.todo.core.database.entity.ReminderEntity
 import io.github.yozh150991.todo.core.database.entity.SectionEntity
 import io.github.yozh150991.todo.core.database.entity.TaskActivityEntity
 import io.github.yozh150991.todo.core.database.entity.TaskEntity
@@ -166,5 +169,57 @@ interface LabelDao {
     suspend fun labelIdsForTask(taskId: String): List<String>
 
     @Query("SELECT COUNT(*) FROM label")
+    suspend fun count(): Int
+}
+
+@Dao
+interface ReminderDao {
+    @Insert
+    suspend fun insert(reminder: ReminderEntity)
+
+    @Update
+    suspend fun update(reminder: ReminderEntity): Int
+
+    @Query("SELECT * FROM reminder WHERE id = :id")
+    suspend fun getById(id: String): ReminderEntity?
+
+    @Query("SELECT * FROM reminder WHERE task_id = :taskId AND deleted_at IS NULL ORDER BY created_at, id")
+    suspend fun forTask(taskId: String): List<ReminderEntity>
+
+    @Query("SELECT COUNT(*) FROM reminder")
+    suspend fun count(): Int
+}
+
+@Dao
+interface ReminderDeliveryDao {
+    @Insert
+    suspend fun insert(delivery: ReminderDeliveryEntity)
+
+    @Update
+    suspend fun update(delivery: ReminderDeliveryEntity): Int
+
+    @Query("SELECT * FROM reminder_delivery WHERE reminder_id = :reminderId ORDER BY planned_at, id")
+    suspend fun forReminder(reminderId: String): List<ReminderDeliveryEntity>
+
+    /** Deliveries still to fire, for re-registering alarms after a reboot or an update (Ф1a PR 7). */
+    @Query("SELECT * FROM reminder_delivery WHERE fired_at IS NULL AND dismissed_at IS NULL ORDER BY planned_at, id")
+    suspend fun pending(): List<ReminderDeliveryEntity>
+
+    @Query("SELECT COUNT(*) FROM reminder_delivery")
+    suspend fun count(): Int
+}
+
+@Dao
+interface DeferredTodoistNodeDao {
+    @Insert
+    suspend fun insertAll(nodes: List<DeferredTodoistNodeEntity>)
+
+    @Query("SELECT * FROM deferred_todoist_node ORDER BY root_recurring_source_id, depth, source_id")
+    suspend fun all(): List<DeferredTodoistNodeEntity>
+
+    @Query("SELECT COUNT(*) FROM deferred_todoist_node WHERE depth = 0")
+    suspend fun rootCount(): Int
+
+    @Query("SELECT COUNT(*) FROM deferred_todoist_node")
     suspend fun count(): Int
 }

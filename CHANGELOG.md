@@ -6,6 +6,10 @@
 
 Web/Desktop релізів і production-міграцій ще немає. Чинне технічне завдання: [`task-manager-scope-roadmap-v2.6.1.md`](task-manager-scope-roadmap-v2.6.1.md); історія рішень специфікації: [`docs/SPEC_CHANGELOG.md`](docs/SPEC_CHANGELOG.md).
 
+### Ф1a — у роботі
+
+- Схема бази v3: колонка `task.duration_days` (тривалість у днях, ADR-005) і таблиці `reminder`, `reminder_delivery`, `deferred_todoist_node`. Оновлення з v2 (`v0.0.1`/`v0.0.2`) — автоматичне, із snapshot і перевіркою (FIX-01); перевірено на справжньому файлі v2 на JVM і емуляторах API 26/37, у браузерах — ланцюжок v1 → v2 → v3.
+
 ### Ф0 — gate закрито 3 листопада 2026 року
 
 - Каркас Kotlin Multiplatform: `core/model`, `core/database`, `core/domain`, `ui`, `androidApp`, `desktopApp`; версії зафіксовано в `gradle/libs.versions.toml` (Kotlin 2.4.21, AGP 9.5.0, Gradle 9.7.0, Compose Multiplatform 1.12.2, Room 3.0.3, SQLite bundled 2.7.1; Android compileSdk/targetSdk 37, minSdk 26). Статуси сумісності — `docs/TECH_COMPATIBILITY.md`.
