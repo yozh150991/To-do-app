@@ -45,6 +45,8 @@ kotlin {
         }
         jvmTest.dependencies {
             implementation(libs.kotlinx.coroutines.test)
+            // Property-based check that the Quick Add parser never loses a word (spec §12.1).
+            implementation(libs.kotest.property)
         }
     }
 }
