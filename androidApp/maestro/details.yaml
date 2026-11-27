@@ -1,0 +1,39 @@
+# Task details and gestures (docs/UX_SPEC.md §3.3, §4; Ф1a PR 3b): a field changed in the details is
+# saved at once, Delete closes the details with "Moved to bin" and Undo, a swipe right completes
+# with Undo, and a swipe left offers the dates.
+#
+# Maestro swipes from the centre of the matched text to 10 % / 90 % of the screen width. The title
+# is long enough to wrap, so its text spans the row and both swipes travel over a third of it —
+# more than the quarter that counts (a short drag springs back by design).
+appId: io.github.yozh150991.todo.debug
+---
+- launchApp:
+    clearState: true
+- tapOn: "Inbox"
+- tapOn: "Add task"
+- inputText: "Call mom about the weekend and buy the train tickets"
+- tapOn: "Add"
+- tapOn: "Open"
+- tapOn: "Priority 4"
+- tapOn: "Priority 1"
+- assertVisible: "Priority 1"
+- takeScreenshot: details
+- tapOn: "Delete"
+- assertVisible: "Moved to bin: Call mom.*"
+- tapOn: "Undo"
+- assertVisible: "Call mom about the weekend.*"
+- swipe:
+    from:
+      text: "Call mom about the weekend.*"
+    direction: RIGHT
+- assertVisible: "Completed: Call mom.*"
+- tapOn: "Undo"
+- assertVisible: "Call mom about the weekend.*"
+- swipe:
+    from:
+      text: "Call mom about the weekend.*"
+    direction: LEFT
+# Each choice is one row with its date ("Next week … Mon Nov 30"): match the start.
+- assertVisible: "Next week.*"
+- tapOn: "Tomorrow.*"
+- assertVisible: "Date changed: Call mom.*"

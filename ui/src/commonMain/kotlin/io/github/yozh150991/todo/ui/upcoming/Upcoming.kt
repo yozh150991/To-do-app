@@ -23,7 +23,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -49,18 +51,18 @@ import io.github.yozh150991.todo.ui.resources.empty_upcoming
 import io.github.yozh150991.todo.ui.resources.inbox_title
 import io.github.yozh150991.todo.ui.resources.tab_upcoming
 import io.github.yozh150991.todo.ui.resources.upcoming_add_for_day
-import io.github.yozh150991.todo.ui.tasklist.CompletionSnackbars
 import io.github.yozh150991.todo.ui.tasklist.DayLabel
 import io.github.yozh150991.todo.ui.tasklist.DayTicker
-import io.github.yozh150991.todo.ui.tasklist.ListEvent
 import io.github.yozh150991.todo.ui.tasklist.TaskActions
 import io.github.yozh150991.todo.ui.tasklist.TaskItem
-import io.github.yozh150991.todo.ui.tasklist.TaskRow
+import io.github.yozh150991.todo.ui.tasklist.ScheduleSheet
+import io.github.yozh150991.todo.ui.tasklist.SwipeableTaskRow
+import io.github.yozh150991.todo.ui.tasklist.UndoCenter
+import io.github.yozh150991.todo.ui.tasklist.UndoSnackbars
 import io.github.yozh150991.todo.ui.tasklist.text
 import io.github.yozh150991.todo.ui.tasklist.weekdayName
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
@@ -95,9 +97,12 @@ data class UpcomingUiState(
  * querying only the dates on screen so far (plan Ф1a §6).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-class UpcomingViewModel(private val repository: TaskRepository, days: DayTicker) : ViewModel() {
-    private val actions = TaskActions(repository, viewModelScope)
-    val events: SharedFlow<ListEvent> = actions.events
+class UpcomingViewModel(
+    private val repository: TaskRepository,
+    days: DayTicker,
+    val undo: UndoCenter = UndoCenter(),
+) : ViewModel() {
+    private val actions = TaskActions(repository, viewModelScope, undo)
     val error: StateFlow<UiMessage?> = actions.error
     private val horizon = MutableStateFlow(INITIAL_DAYS)
 
@@ -123,7 +128,7 @@ class UpcomingViewModel(private val repository: TaskRepository, days: DayTicker)
 
     fun toggle(task: Task) = actions.toggle(task)
 
-    fun uncomplete(taskId: String) = actions.uncomplete(taskId)
+    fun schedule(task: Task, date: LocalDate?) = actions.schedule(task, date)
 
     companion object {
         const val INITIAL_DAYS = 60
@@ -155,7 +160,8 @@ fun UpcomingScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val failed by viewModel.error.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
-    CompletionSnackbars(viewModel.events, snackbar, onUndo = viewModel::uncomplete)
+    UndoSnackbars(viewModel.undo, snackbar)
+    var scheduling by remember { mutableStateOf<Task?>(null) }
     val list = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val inbox = stringResource(Res.string.inbox_title)
@@ -216,18 +222,23 @@ fun UpcomingScreen(
                         DayHeader(day.date, today, onAdd = { onAddTask(QuickAddContext(date = day.date, today = today)) })
                     }
                     items(day.tasks, key = { "${day.date}-${it.id}" }) { task ->
-                        TaskRow(
+                        SwipeableTaskRow(
                             item = TaskItem(task),
                             today = today,
                             projectName = state.projectNames[task.projectId] ?: inbox,
                             selected = task.id == selectedTaskId,
                             onOpen = { onOpenTask(task.id) },
                             onToggle = { viewModel.toggle(task) },
+                            onSchedule = { scheduling = task },
                         )
                     }
                 }
             }
         }
+    }
+    val scheduled = scheduling
+    if (scheduled != null && today != null) {
+        ScheduleSheet(scheduled, today, onPick = { viewModel.schedule(scheduled, it) }, onDismiss = { scheduling = null })
     }
 }
 

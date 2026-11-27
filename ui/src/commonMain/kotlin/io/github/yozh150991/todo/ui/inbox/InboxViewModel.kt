@@ -5,14 +5,13 @@ import androidx.lifecycle.viewModelScope
 import io.github.yozh150991.todo.core.domain.TaskRepository
 import io.github.yozh150991.todo.core.model.Task
 import io.github.yozh150991.todo.ui.tasklist.DayTicker
-import io.github.yozh150991.todo.ui.tasklist.ListEvent
 import io.github.yozh150991.todo.ui.tasklist.TaskActions
 import io.github.yozh150991.todo.ui.tasklist.TaskItem
+import io.github.yozh150991.todo.ui.tasklist.UndoCenter
 import io.github.yozh150991.todo.ui.tasklist.treeOrder
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
@@ -58,10 +57,10 @@ open class ProjectViewModel(
     private val projectId: String?,
     private val repository: TaskRepository,
     days: DayTicker? = null,
+    val undo: UndoCenter = UndoCenter(),
 ) : ViewModel() {
 
-    private val actions = TaskActions(repository, viewModelScope)
-    val events: SharedFlow<ListEvent> = actions.events
+    private val actions = TaskActions(repository, viewModelScope, undo)
     val error: StateFlow<UiMessage?> = actions.error
     private val showCompleted = MutableStateFlow(false)
     private val today: Flow<LocalDate?> = days?.today ?: flowOf(null)
@@ -113,8 +112,11 @@ open class ProjectViewModel(
 
     fun uncomplete(taskId: String) = actions.uncomplete(taskId)
 
+    fun schedule(task: Task, date: LocalDate?) = actions.schedule(task, date)
+
     fun toggleShowCompleted() = showCompleted.update { !it }
 }
 
 /** The Inbox (UX_SPEC §3.1): the project list of the system Inbox. */
-class InboxViewModel(repository: TaskRepository, days: DayTicker? = null) : ProjectViewModel(null, repository, days)
+class InboxViewModel(repository: TaskRepository, days: DayTicker? = null, undo: UndoCenter = UndoCenter()) :
+    ProjectViewModel(null, repository, days, undo)

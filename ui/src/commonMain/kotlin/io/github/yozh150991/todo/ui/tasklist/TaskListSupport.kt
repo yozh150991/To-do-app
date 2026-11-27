@@ -8,13 +8,9 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -24,7 +20,10 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import io.github.yozh150991.todo.core.domain.FieldEdit
+import io.github.yozh150991.todo.core.domain.TaskEdit
 import io.github.yozh150991.todo.core.domain.TaskRepository
+import io.github.yozh150991.todo.core.model.Due
 import io.github.yozh150991.todo.core.model.Project
 import io.github.yozh150991.todo.core.model.Task
 import io.github.yozh150991.todo.core.model.ValidationException
@@ -33,34 +32,25 @@ import io.github.yozh150991.todo.ui.resources.Res
 import io.github.yozh150991.todo.ui.resources.ic_more
 import io.github.yozh150991.todo.ui.resources.more_options
 import io.github.yozh150991.todo.ui.resources.show_completed
-import io.github.yozh150991.todo.ui.resources.snackbar_completed
-import io.github.yozh150991.todo.ui.resources.snackbar_undo
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import org.jetbrains.compose.resources.getString
+import kotlinx.datetime.LocalDate
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 
-/** Something a list tells the user once, with an Undo (UX_SPEC §5.5). */
-sealed interface ListEvent {
-    data class Completed(val taskId: String, val title: String) : ListEvent
-}
-
 /**
- * Complete and reopen from any list, through the repository; a completion is announced once with
- * Undo, which is a new command (`uncomplete`), not the removal of the first one (plan Ф1a §5).
+ * Changes made from any list, through the repository; each one is offered once for Undo through
+ * [undo], and Undo is a new command (`uncomplete`, `restore`, the old date), not the removal of the
+ * first one (plan Ф1a §5).
  */
-class TaskActions(private val repository: TaskRepository, private val scope: CoroutineScope) {
-    private val _events = MutableSharedFlow<ListEvent>(extraBufferCapacity = 16)
-    val events: SharedFlow<ListEvent> = _events.asSharedFlow()
-
+class TaskActions(
+    private val repository: TaskRepository,
+    private val scope: CoroutineScope,
+    val undo: UndoCenter,
+) {
     private val _error = MutableStateFlow<UiMessage?>(null)
     val error: StateFlow<UiMessage?> = _error.asStateFlow()
 
@@ -69,10 +59,31 @@ class TaskActions(private val repository: TaskRepository, private val scope: Cor
     }
 
     fun complete(task: Task) = launchSafely {
-        if (repository.complete(task.id)) _events.emit(ListEvent.Completed(task.id, task.content))
+        if (repository.complete(task.id)) {
+            undo.post(UndoText.Completed(task.content)) { repository.uncomplete(task.id) }
+        }
     }
 
     fun uncomplete(taskId: String) = launchSafely { repository.uncomplete(taskId) }
+
+    /** To the bin with its sub-tasks (spec §4.3); Undo restores them. */
+    fun delete(task: Task) = launchSafely {
+        if (repository.delete(task.id)) {
+            undo.post(UndoText.Binned(task.content)) { repository.restore(task.id) }
+        }
+    }
+
+    /**
+     * A new date ([date] null: no date) keeping the time and zone (UX_SPEC §4, swipe left). A time
+     * that does not exist on the new date (TIME-08) is not saved; the details offer the choices.
+     */
+    fun schedule(task: Task, date: LocalDate?) = launchSafely {
+        val previous = task.due
+        val next = date?.let { Due(it, previous?.time, previous?.zoneId) }
+        if (repository.updateTask(task.id, TaskEdit(due = FieldEdit.Set(next)))) {
+            undo.post(UndoText.Scheduled(task.content)) { repository.updateTask(task.id, TaskEdit(due = FieldEdit.Set(previous))) }
+        }
+    }
 
     private fun launchSafely(block: suspend () -> Unit) {
         scope.launch {
@@ -83,25 +94,6 @@ class TaskActions(private val repository: TaskRepository, private val scope: Cor
                 _error.value = UiMessage.NotSaved(e.message)
             } catch (e: IllegalStateException) {
                 _error.value = UiMessage.DatabaseUnavailable(e.message)
-            }
-        }
-    }
-}
-
-/** Shows each completion as a snackbar with Undo (UX_SPEC §3.1: «Виконано · Скасувати»). */
-@Composable
-fun CompletionSnackbars(events: Flow<ListEvent>, snackbar: SnackbarHostState, onUndo: (String) -> Unit) {
-    LaunchedEffect(events, snackbar) {
-        events.collect { event ->
-            when (event) {
-                is ListEvent.Completed -> {
-                    val result = snackbar.showSnackbar(
-                        message = getString(Res.string.snackbar_completed, event.title),
-                        actionLabel = getString(Res.string.snackbar_undo),
-                        duration = SnackbarDuration.Long,
-                    )
-                    if (result == SnackbarResult.ActionPerformed) onUndo(event.taskId)
-                }
             }
         }
     }

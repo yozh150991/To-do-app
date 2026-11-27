@@ -21,6 +21,7 @@ import io.github.yozh150991.todo.ui.inbox.ProjectViewModel
 import io.github.yozh150991.todo.ui.navigation.BrowseScreen
 import io.github.yozh150991.todo.ui.navigation.BrowseViewModel
 import io.github.yozh150991.todo.ui.tasklist.DayTicker
+import io.github.yozh150991.todo.ui.tasklist.UndoCenter
 import io.github.yozh150991.todo.ui.today.TodayScreen
 import io.github.yozh150991.todo.ui.today.TodayViewModel
 import io.github.yozh150991.todo.ui.upcoming.UpcomingScreen
@@ -49,14 +50,16 @@ import kotlin.time.Clock
  */
 val uiModule = module {
     single { DayTicker(Clock.System) { TimeZones.systemDefault() } }
-    viewModel { InboxViewModel(get(), get()) }
-    viewModel { params -> ProjectViewModel(params.get(), get(), get()) }
-    viewModel { TodayViewModel(get(), get()) }
-    viewModel { UpcomingViewModel(get(), get()) }
+    // One pending Undo for the whole app (UX_SPEC §4), shared by every screen.
+    single { UndoCenter() }
+    viewModel { InboxViewModel(get(), get(), get()) }
+    viewModel { params -> ProjectViewModel(params.get(), get(), get(), get()) }
+    viewModel { TodayViewModel(get(), get(), get()) }
+    viewModel { UpcomingViewModel(get(), get(), get()) }
     viewModelOf(::BrowseViewModel)
     viewModelOf(::AboutViewModel)
     viewModelOf(::QuickAddViewModel)
-    viewModel { params -> TaskDetailViewModel(params.get(), get()) }
+    viewModel { params -> TaskDetailViewModel(params.get(), get(), get(), get()) }
 }
 
 // Own palette (spec §1.3: no Todoist branding). Refined in docs/UX_SPEC.md.
