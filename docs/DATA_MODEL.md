@@ -42,14 +42,36 @@
 
 ## Транзакційний контракт
 
-Усі локальні мутації йдуть через `TaskRepository` → `LocalStore.write { … }` (одна SQLite write-транзакція):
+Усі локальні мутації йдуть через `TaskRepository` (і його `projects`, `reminders`) → `LocalStore.write { … }` (одна SQLite write-транзакція). Для кожної зміненої сутності:
 
 1. змінити сутність;
-2. записати `task_activity`;
+2. для задачі — записати `task_activity`;
 3. `UPDATE local_workspace SET last_local_seq = last_local_seq + 1`, прочитати нове значення;
 4. вставити `outbox_operation` з цим `local_seq`.
 
-Будь-який виняток на будь-якому кроці відкочує всі чотири. `local_seq` береться з лічильника, а не з `MAX(local_seq)`, тож видалення підтверджених операцій у майбутньому не призведе до повторного використання номера.
+Команда, що змінює кілька рядків (перенесення піддерева, видалення проєкту), повторює кроки для кожного рядка в тій самій транзакції. Будь-який виняток на будь-якому кроці відкочує все. `local_seq` береться з лічильника, а не з `MAX(local_seq)`, тож видалення підтверджених операцій у майбутньому не призведе до повторного використання номера.
+
+## Операції Ф1a
+
+Payload (`field_patch`) — JSON-об'єкт із назвами колонок і ключем версії `"v": 1` (`OperationPayload`); після Ф5 його читатиме сервер, тож зміна форми — нова версія. Payload збірок Ф0 (`v0.0.1`, `v0.0.2`) ключа не мають, їхня форма — версія 1. `create` несе повний запис, решта — лише змінені поля; `due_date`, `due_time`, `due_tz` завжди йдуть разом.
+
+| `op_type` | Що в payload | `task_activity.event_type` |
+| --- | --- | --- |
+| `task.create` | Усі поля задачі | `created` |
+| `task.update` | Змінені з `content`, `description`, `priority`, `due_*`, `deadline`, `duration_min`, `duration_days` | `content_changed`, `description_changed`, `priority_changed`, `due_changed`, `deadline_changed`, `duration_changed`; кілька видів полів — `updated` |
+| `task.move` | Змінені з `project_id`, `section_id`, `parent_id`, `child_order`; по одній на кожну задачу піддерева | `moved` |
+| `task.complete`, `task.uncomplete` | `completed_at` | `completed`, `uncompleted` |
+| `task.delete`, `task.restore` | `deleted_at`; по одній на кожну задачу піддерева | `deleted`, `restored` |
+| `project.create` | Усі поля проєкту | — |
+| `project.update` | Змінені з `name`, `description`, `color`, `is_favorite`, `parent_id`, `child_order` | — |
+| `project.archive`, `project.unarchive` | `archived_at`; по одній на кожен підпроєкт | — |
+| `project.delete` | `deleted_at`, `task_fate` (`move_to_inbox` / `delete_with_project`); операції задач ідуть перед нею | — |
+| `project.restore` | `deleted_at` | — |
+| `reminder.create`, `reminder.update`, `reminder.delete` | Повний запис / змінені з `remind_at`, `offset_min`, `enabled` / `deleted_at` | — |
+
+**Дерево задач.** Задача верхнього рівня має глибину 0, підзадачі — до `TaskRules.MAX_DEPTH = 4` (чотири рівні відступу, як у Todoist; межі 0/1/4/5 — spec §12.2). Підзадача — у проєкті й секції свого батька; циклів немає. Піддерево переноситься цілим, разом із задачами в кошику, тож відновлена пізніше задача не опиниться в іншому проєкті, ніж батько. В архівний проєкт не можна додати чи перенести задачу.
+
+**Undo.** Окрема команда, а не видалення операції з outbox. Усі рядки однієї команди отримують той самий момент (`deleted_at`, `archived_at`), тож `restore` / `unarchive` повертають рівно ті рядки, які прибрала ця команда; прибране раніше окремою дією лишається. `moveTask` повертає `TaskMove` з попереднім місцем кожної зміненої задачі, `undoMove` ставить піддерево назад (секцію й порядок теж); `projects.delete` повертає `ProjectDeletion` для `undoDelete`. Системний Inbox не перейменовується, не переноситься, не архівується, не видаляється і не має підпроєктів.
 
 ## Контракти `LocalWorkspace`, `ExternalIdentity` і confirmed / pending / effective
 

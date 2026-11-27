@@ -2,15 +2,12 @@ package io.github.yozh150991.todo.core.domain
 
 import io.github.yozh150991.todo.core.database.DatabaseDiagnostics
 import io.github.yozh150991.todo.core.database.LocalStore
-import io.github.yozh150991.todo.core.database.diagnostics
 import io.github.yozh150991.todo.core.database.LocalStoreProvider
-import io.github.yozh150991.todo.core.database.entity.LocalWorkspaceEntity
-import io.github.yozh150991.todo.core.database.entity.TaskActivityEntity
+import io.github.yozh150991.todo.core.database.diagnostics
 import io.github.yozh150991.todo.core.database.entity.TaskEntity
 import io.github.yozh150991.todo.core.database.toDomain
 import io.github.yozh150991.todo.core.database.toEntity
 import io.github.yozh150991.todo.core.model.ActivityEvent
-import io.github.yozh150991.todo.core.model.ClaimStatus
 import io.github.yozh150991.todo.core.model.Due
 import io.github.yozh150991.todo.core.model.IdGenerator
 import io.github.yozh150991.todo.core.model.LocalWorkspace
@@ -18,36 +15,39 @@ import io.github.yozh150991.todo.core.model.OperationType
 import io.github.yozh150991.todo.core.model.OrderKeys
 import io.github.yozh150991.todo.core.model.OutboxOperation
 import io.github.yozh150991.todo.core.model.Priority
-import io.github.yozh150991.todo.core.model.Project
 import io.github.yozh150991.todo.core.model.RandomUuidGenerator
 import io.github.yozh150991.todo.core.model.Task
 import io.github.yozh150991.todo.core.model.TaskRules
+import io.github.yozh150991.todo.core.model.TimeZones
 import io.github.yozh150991.todo.core.model.ValidationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlin.time.Clock
-import kotlin.time.Instant
 
 /**
- * Local-first repository for tasks (spec §3.2).
+ * Local-first repository for tasks (spec §3.2), and the entry point to [projects] and [reminders].
  *
- * Every mutation runs in one [LocalStore.write] transaction that changes the entity, appends a
- * `TaskActivity` and enqueues a typed `OutboxOperation` — all or nothing (invariant §2.1.1).
- * The UI, widgets and notification actions must go through this class; nothing writes Room directly.
+ * Every mutation runs in one write transaction that changes the entities, appends a `TaskActivity`
+ * per changed task and enqueues one typed `OutboxOperation` per changed entity — all or nothing
+ * (invariant §2.1.1). The UI, widgets and notification actions must go through these classes;
+ * nothing writes Room directly. Commands that change nothing return `false` or `null` and record
+ * nothing. Undo is a new command (plan Ф1a §5), never the removal of an outbox row.
  */
 class TaskRepository(
-    private val stores: LocalStoreProvider,
-    private val clock: Clock = Clock.System,
-    private val ids: IdGenerator = RandomUuidGenerator,
+    stores: LocalStoreProvider,
+    clock: Clock = Clock.System,
+    ids: IdGenerator = RandomUuidGenerator,
     /** Separate from [ids] so tests can force an outbox failure after the entity row was written. */
-    private val operationIds: IdGenerator = ids,
+    operationIds: IdGenerator = ids,
+    /** Zone for floating due times; tests pass a fixed one (spec §4.0.1 п. 7). */
+    deviceZone: () -> TimeZone = { TimeZones.systemDefault() },
 ) {
     /** Convenience for an already opened store (tests, tools). */
     constructor(
@@ -55,27 +55,21 @@ class TaskRepository(
         clock: Clock = Clock.System,
         ids: IdGenerator = RandomUuidGenerator,
         operationIds: IdGenerator = ids,
-    ) : this(LocalStoreProvider.of(store), clock, ids, operationIds)
+        deviceZone: () -> TimeZone = { TimeZones.systemDefault() },
+    ) : this(LocalStoreProvider.of(store), clock, ids, operationIds, deviceZone)
 
-    private suspend fun store(): LocalStore = stores.get()
+    private val mutations = Mutations(stores, clock, ids, operationIds, deviceZone)
 
-    private val bootstrapMutex = Mutex()
-    private var cachedWorkspace: LocalWorkspace? = null
+    /** Projects: create, edit, nest, archive, delete with a choice for their tasks (plan Ф1a PR 5). */
+    val projects: ProjectRepository = ProjectRepository(mutations)
 
-    /**
-     * Returns the local workspace, creating it together with the system Inbox on first use.
-     * Identity fields (workspace, device, Inbox IDs) never change before the cloud claim (Ф5a),
-     * so the result is cached; `lastLocalSeq` in the cached copy is informational only.
-     */
-    suspend fun workspace(): LocalWorkspace = bootstrapMutex.withLock {
-        cachedWorkspace ?: run {
-            val store = store()
-            if (store.workspaces.get() == null) {
-                store.write { if (workspaces.get() == null) createWorkspace() }
-            }
-            checkNotNull(store.workspaces.get()) { "Workspace bootstrap failed" }.toDomain()
-        }.also { cachedWorkspace = it }
-    }
+    /** Reminders of tasks (Ф1a: the automatic one; Ф3: the full set). */
+    val reminders: ReminderRepository = ReminderRepository(mutations)
+
+    private suspend fun store(): LocalStore = mutations.store()
+
+    /** The local workspace, created together with the system Inbox on first use. */
+    suspend fun workspace(): LocalWorkspace = mutations.workspace()
 
     fun observeInbox(): Flow<List<Task>> = flow { emitAll(observeOpenTasks(workspace().inboxId)) }
 
@@ -94,230 +88,211 @@ class TaskRepository(
 
     suspend fun getTask(id: String): Task? = store().tasks.getById(id)?.toDomain()
 
+    /** Direct sub-tasks that are not in the bin, in list order. */
+    suspend fun subtasks(parentId: String): List<Task> =
+        store().tasks.children(parentId).filter { it.deletedAt == null }.map(TaskEntity::toDomain)
+
     suspend fun pendingOperations(): List<OutboxOperation> = store().outbox.pending().map { it.toDomain() }
 
+    /**
+     * Creates a task at the end of [projectId] (Inbox when null) or, with [parentId], at the end of
+     * that task's sub-tasks — in the parent's project and section, at most [TaskRules.MAX_DEPTH] deep.
+     */
     suspend fun createTask(
         content: String,
         projectId: String? = null,
         priority: Priority = Priority.DEFAULT,
         due: Due? = null,
+        description: String = "",
+        parentId: String? = null,
+        deadline: LocalDate? = null,
+        durationMinutes: Int? = null,
+        durationDays: Int? = null,
     ): Task {
         val normalized = TaskRules.normalizeContent(content)
-        val ws = workspace()
-        return store().write {
-            val targetProjectId = projectId ?: ws.inboxId
-            val project = projects.getById(targetProjectId)
-            if (project == null || project.deletedAt != null) {
-                throw ValidationException("Project $targetProjectId does not exist")
+        TaskRules.checkDuration(durationMinutes, durationDays)
+        mutations.checkExplicitTime(due)
+        return mutations.write {
+            val parent = parentId?.let { requireLiveTask(it) }
+            val targetProjectId = parent?.projectId ?: projectId ?: ws.inboxId
+            if (parent != null && projectId != null && projectId != parent.projectId) {
+                hierarchy("A sub-task must be in the project of its parent")
             }
-            val now = clock.now()
+            requireProjectForTasks(targetProjectId)
+            if (parent != null && store.depthOf(parent) + 1 > TaskRules.MAX_DEPTH) {
+                hierarchy("Sub-tasks go at most ${TaskRules.MAX_DEPTH} levels deep")
+            }
             val task = Task(
-                id = ids.newId(),
+                id = mutations.ids.newId(),
                 projectId = targetProjectId,
-                childOrder = OrderKeys.after(tasks.lastTopLevelOrder(targetProjectId)),
+                sectionId = parent?.sectionId,
+                parentId = parent?.id,
+                childOrder = if (parent != null) {
+                    OrderKeys.after(store.tasks.lastChildOrder(parent.id))
+                } else {
+                    OrderKeys.after(store.tasks.lastTopLevelOrder(targetProjectId))
+                },
                 content = normalized,
+                description = description,
                 priority = priority,
                 due = due,
+                deadline = deadline,
+                durationMinutes = durationMinutes,
+                durationDays = durationDays,
                 createdAt = now,
                 updatedAt = now,
             )
-            tasks.insert(task.toEntity())
+            store.tasks.insert(task.toEntity())
             val snapshot = task.snapshot()
-            commit(ws, OperationType.TASK_CREATE, ActivityEvent.CREATED, task.id, snapshot, snapshot, null, now)
+            record(OperationType.TASK_CREATE, task.id, snapshot, null, Activity(ActivityEvent.CREATED, snapshot))
             task
         }
     }
 
-    /** Renames a task. Returns false when the trimmed content is unchanged (no operation is recorded). */
-    suspend fun updateContent(taskId: String, content: String): Boolean {
-        val normalized = TaskRules.normalizeContent(content)
-        val ws = workspace()
-        return store().write {
+    /**
+     * Changes the task's own fields. Only fields that really change go into the operation; returns
+     * false when nothing changes. The due date of a recurring task is the cache of its occurrence
+     * and cannot be edited before the recurrence engine exists (Ф2).
+     */
+    suspend fun updateTask(taskId: String, edit: TaskEdit): Boolean {
+        val content = when (val c = edit.content) {
+            FieldEdit.Keep -> null
+            is FieldEdit.Set -> TaskRules.normalizeContent(c.value)
+        }
+        val due = edit.due
+        if (due is FieldEdit.Set) mutations.checkExplicitTime(due.value)
+        return mutations.write {
             val row = requireLiveTask(taskId)
-            if (row.content == normalized) return@write false
-            val now = clock.now()
-            tasks.update(row.copy(content = normalized, updatedAt = now.toEpochMilliseconds()))
-            commit(
-                ws, OperationType.TASK_UPDATE, ActivityEvent.CONTENT_CHANGED, taskId,
-                patch = buildJsonObject { put("content", normalized) },
-                changes = buildJsonObject { put("content", change(row.content, normalized)) },
-                baseRevision = row.revision, now = now,
+            val current = row.toDomain()
+            val next = current.copy(
+                content = content ?: current.content,
+                description = edit.description.applyTo(current.description),
+                priority = edit.priority.applyTo(current.priority),
+                due = edit.due.applyTo(current.due),
+                deadline = edit.deadline.applyTo(current.deadline),
+                durationMinutes = edit.durationMinutes.applyTo(current.durationMinutes),
+                durationDays = edit.durationDays.applyTo(current.durationDays),
+            ) // Task's init checks the duration rule (ADR-005).
+            if (next == current) return@write false
+            if (next.due != current.due && row.rrule != null) {
+                throw ValidationException("The due date of a recurring task changes through the recurrence engine (Ф2)")
+            }
+
+            val changes = FieldChanges()
+            changes.diff("content", current.content, next.content) { jsonOf(it) }
+            changes.diff("description", current.description, next.description) { jsonOf(it) }
+            changes.diff("priority", current.priority.level, next.priority.level) { jsonOf(it) }
+            if (next.due != current.due) {
+                // The three due columns are one value: they always travel together.
+                changes.add("due_date", jsonOf(current.due?.date?.toString()), jsonOf(next.due?.date?.toString()))
+                changes.add("due_time", jsonOf(current.due?.time?.toString()), jsonOf(next.due?.time?.toString()))
+                changes.add("due_tz", jsonOf(current.due?.zoneId), jsonOf(next.due?.zoneId))
+            }
+            changes.diff("deadline", current.deadline?.toString(), next.deadline?.toString()) { jsonOf(it) }
+            changes.diff("duration_min", current.durationMinutes, next.durationMinutes) { jsonOf(it) }
+            changes.diff("duration_days", current.durationDays, next.durationDays) { jsonOf(it) }
+
+            store.tasks.update(next.copy(updatedAt = now).toEntity(existing = row))
+            record(
+                OperationType.TASK_UPDATE, taskId, changes.patch(), row.revision,
+                Activity(eventFor(changes.keys), changes.activity()),
             )
             true
         }
     }
 
-    /** Completes a one-off task. Completing an already completed task is a no-op and returns false. */
-    suspend fun complete(taskId: String): Boolean {
-        val ws = workspace()
-        return store().write {
+    /** Renames a task. Returns false when the trimmed content is unchanged (no operation is recorded). */
+    suspend fun updateContent(taskId: String, content: String): Boolean =
+        updateTask(taskId, TaskEdit(content = FieldEdit.Set(content)))
+
+    /**
+     * Moves the task with all its sub-tasks: under [parentId] (into the parent's project), or to the
+     * top level of [projectId] — the task's own project when null, which is how a sub-task is
+     * promoted. The task goes after the last sibling at the new place; sub-tasks keep their order.
+     * Every changed task gets its own `task.move` in one transaction. Returns null when the task is
+     * already there.
+     */
+    suspend fun moveTask(taskId: String, projectId: String? = null, parentId: String? = null): TaskMove? =
+        mutations.write {
             val row = requireLiveTask(taskId)
-            if (row.rrule != null) {
-                // Invariant §2.1.13: recurring tasks are completed by the recurrence engine (phase Ф2) only.
-                throw ValidationException("Recurring tasks cannot be completed before the recurrence engine exists")
+            val parent = parentId?.let { store.tasks.getById(it) ?: notFound("Parent task $it") }
+            if (parent != null && projectId != null && projectId != parent.projectId) {
+                hierarchy("A sub-task must be in the project of its parent")
             }
-            if (!row.isCompletable) throw ValidationException("Task $taskId is not completable")
-            if (row.completedAt != null) return@write false
-            val now = clock.now()
-            tasks.update(row.copy(completedAt = now.toEpochMilliseconds(), updatedAt = now.toEpochMilliseconds()))
-            commit(
-                ws, OperationType.TASK_COMPLETE, ActivityEvent.COMPLETED, taskId,
-                patch = buildJsonObject { put("completed_at", now.toString()) },
-                changes = buildJsonObject { put("completed_at", change(null, now.toString())) },
-                baseRevision = row.revision, now = now,
-            )
-            true
+            val targetProjectId = parent?.projectId ?: projectId ?: row.projectId
+            if (targetProjectId == row.projectId && parent?.id == row.parentId) return@write null
+            checkPlacement(store.taskSubtree(row), targetProjectId, parent)
+            TaskMove(taskId, moveSubtree(row, targetProjectId, parent))
         }
+
+    /**
+     * Undo of [moveTask]: the task goes back to exactly where it was — section and order included —
+     * with its subtree. Fails without changes when the old place is no longer valid (the old project
+     * or parent was binned, or the old parent is now inside the moved subtree).
+     */
+    suspend fun undoMove(move: TaskMove): Boolean = mutations.write { undoSubtreeMove(move) }
+
+    /**
+     * Completes a one-off task. Completing an already completed task is a no-op and returns false.
+     * Sub-tasks are not completed with their parent (spec §4.3).
+     */
+    suspend fun complete(taskId: String): Boolean = mutations.write {
+        val row = requireLiveTask(taskId)
+        if (row.rrule != null) {
+            // Invariant §2.1.13: recurring tasks are completed by the recurrence engine (phase Ф2) only.
+            throw ValidationException("Recurring tasks cannot be completed before the recurrence engine exists")
+        }
+        if (!row.isCompletable) throw ValidationException("Task $taskId is not completable")
+        if (row.completedAt != null) return@write false
+        store.tasks.update(row.copy(completedAt = nowMillis, updatedAt = nowMillis))
+        val changes = FieldChanges().apply { add("completed_at", jsonOf(null as String?), jsonOf(now.toString())) }
+        record(OperationType.TASK_COMPLETE, taskId, changes.patch(), row.revision, Activity(ActivityEvent.COMPLETED, changes.activity()))
+        true
     }
 
     /** Reopens a completed task. Returns false when the task was not completed. */
-    suspend fun uncomplete(taskId: String): Boolean {
-        val ws = workspace()
-        return store().write {
-            val row = requireLiveTask(taskId)
-            val completedAt = row.completedAt ?: return@write false
-            val now = clock.now()
-            tasks.update(row.copy(completedAt = null, updatedAt = now.toEpochMilliseconds()))
-            commit(
-                ws, OperationType.TASK_UNCOMPLETE, ActivityEvent.UNCOMPLETED, taskId,
-                patch = buildJsonObject { put("completed_at", null as String?) },
-                changes = buildJsonObject {
-                    put("completed_at", change(Instant.fromEpochMilliseconds(completedAt).toString(), null))
-                },
-                baseRevision = row.revision, now = now,
-            )
-            true
-        }
+    suspend fun uncomplete(taskId: String): Boolean = mutations.write {
+        val row = requireLiveTask(taskId)
+        val completedAt = row.completedAt ?: return@write false
+        store.tasks.update(row.copy(completedAt = null, updatedAt = nowMillis))
+        val changes = FieldChanges().apply { add("completed_at", jsonOfMillis(completedAt), jsonOf(null as String?)) }
+        record(OperationType.TASK_UNCOMPLETE, taskId, changes.patch(), row.revision, Activity(ActivityEvent.UNCOMPLETED, changes.activity()))
+        true
     }
 
-    /** Soft delete (spec §4.3): the row stays for Trash/Undo and sync tombstones. */
-    suspend fun delete(taskId: String): Boolean {
-        val ws = workspace()
-        return store().write {
-            val row = tasks.getById(taskId) ?: throw ValidationException("Task $taskId does not exist")
-            if (row.deletedAt != null) return@write false
-            val now = clock.now()
-            tasks.update(row.copy(deletedAt = now.toEpochMilliseconds(), updatedAt = now.toEpochMilliseconds()))
-            commit(
-                ws, OperationType.TASK_DELETE, ActivityEvent.DELETED, taskId,
-                patch = buildJsonObject { put("deleted_at", now.toString()) },
-                changes = buildJsonObject { put("deleted_at", change(null, now.toString())) },
-                baseRevision = row.revision, now = now,
-            )
-            true
-        }
+    /**
+     * Soft delete (spec §4.3): the task and all its sub-tasks go to the bin in one transaction, one
+     * `task.delete` each; rows stay for Undo and sync tombstones. Returns false when already binned.
+     */
+    suspend fun delete(taskId: String): Boolean = mutations.write {
+        val row = store.tasks.getById(taskId) ?: notFound("Task $taskId")
+        if (row.deletedAt != null) return@write false
+        binSubtree(row) > 0
     }
 
-    suspend fun restore(taskId: String): Boolean {
-        val ws = workspace()
-        return store().write {
-            val row = tasks.getById(taskId) ?: throw ValidationException("Task $taskId does not exist")
-            val deletedAt = row.deletedAt ?: return@write false
-            val now = clock.now()
-            tasks.update(row.copy(deletedAt = null, updatedAt = now.toEpochMilliseconds()))
-            commit(
-                ws, OperationType.TASK_RESTORE, ActivityEvent.RESTORED, taskId,
-                patch = buildJsonObject { put("deleted_at", null as String?) },
-                changes = buildJsonObject {
-                    put("deleted_at", change(Instant.fromEpochMilliseconds(deletedAt).toString(), null))
-                },
-                baseRevision = row.revision, now = now,
-            )
-            true
-        }
+    /**
+     * Takes the task out of the bin with the sub-tasks binned together with it (Undo of [delete]).
+     * Its parent must not be in the bin. Returns false when the task is not binned.
+     */
+    suspend fun restore(taskId: String): Boolean = mutations.write {
+        val row = store.tasks.getById(taskId) ?: notFound("Task $taskId")
+        if (row.deletedAt == null) return@write false
+        restoreSubtree(row) > 0
     }
 
-    // --- internals -------------------------------------------------------------------------
-
-    private suspend fun LocalStore.createWorkspace(): LocalWorkspaceEntity {
-        val now = clock.now()
-        val workspaceId = ids.newId()
-        val deviceId = ids.newId()
-        val inbox = Project(
-            id = ids.newId(),
-            name = INBOX_NAME,
-            childOrder = OrderKeys.first(),
-            isInbox = true,
-            createdAt = now,
-            updatedAt = now,
-        )
-        val workspace = LocalWorkspaceEntity(
-            workspaceId = workspaceId,
-            accountScope = LocalWorkspace.localScope(workspaceId),
-            inboxId = inbox.id,
-            deviceId = deviceId,
-            claimStatus = ClaimStatus.LOCAL.wire,
-            boundUserId = null,
-            claimOperationId = null,
-            backupCheckpoint = null,
-            lastLocalSeq = 0,
-            createdAt = now.toEpochMilliseconds(),
-        )
-        workspaces.insert(workspace)
-        projects.insert(inbox.toEntity())
-        enqueue(
-            operationId = operationIds.newId(),
-            workspaceId = workspaceId,
-            type = OperationType.PROJECT_CREATE,
-            entityId = inbox.id,
-            fieldPatchJson = buildJsonObject {
-                put("id", inbox.id)
-                put("name", inbox.name)
-                put("is_inbox", true)
-                put("child_order", inbox.childOrder)
-                put("created_at", now.toString())
-            }.toString(),
-            baseRevision = null,
-            deviceId = deviceId,
-            createdAtMillis = now.toEpochMilliseconds(),
-        )
-        return workspace
-    }
-
-    private suspend fun LocalStore.requireLiveTask(taskId: String): TaskEntity {
-        val row = tasks.getById(taskId) ?: throw ValidationException("Task $taskId does not exist")
-        if (row.deletedAt != null) throw ValidationException("Task $taskId is deleted")
-        return row
-    }
-
-    /** Activity + outbox for one mutation; called inside the same write transaction as the entity change. */
-    private suspend fun LocalStore.commit(
-        ws: LocalWorkspace,
-        type: OperationType,
-        event: ActivityEvent,
-        entityId: String,
-        patch: JsonObject,
-        changes: JsonObject,
-        baseRevision: Long?,
-        now: Instant,
-    ) {
-        val operationId = operationIds.newId()
-        activities.insert(
-            TaskActivityEntity(
-                id = ids.newId(),
-                taskId = entityId,
-                eventType = event.wire,
-                fieldChanges = changes.toString(),
-                createdAt = now.toEpochMilliseconds(),
-                deviceId = ws.deviceId,
-                operationId = operationId,
-            ),
-        )
-        enqueue(
-            operationId = operationId,
-            workspaceId = ws.workspaceId,
-            type = type,
-            entityId = entityId,
-            fieldPatchJson = patch.toString(),
-            baseRevision = baseRevision,
-            deviceId = ws.deviceId,
-            createdAtMillis = now.toEpochMilliseconds(),
-        )
-    }
-
-    private fun change(old: String?, new: String?): JsonObject = buildJsonObject {
-        put("old", old)
-        put("new", new)
+    private fun eventFor(fields: Set<String>): ActivityEvent {
+        val kinds = fields.map { field ->
+            when (field) {
+                "content" -> ActivityEvent.CONTENT_CHANGED
+                "description" -> ActivityEvent.DESCRIPTION_CHANGED
+                "priority" -> ActivityEvent.PRIORITY_CHANGED
+                "due_date", "due_time", "due_tz" -> ActivityEvent.DUE_CHANGED
+                "deadline" -> ActivityEvent.DEADLINE_CHANGED
+                "duration_min", "duration_days" -> ActivityEvent.DURATION_CHANGED
+                else -> ActivityEvent.UPDATED
+            }
+        }.toSet()
+        return kinds.singleOrNull() ?: ActivityEvent.UPDATED
     }
 
     private fun Task.snapshot(): JsonObject = buildJsonObject {

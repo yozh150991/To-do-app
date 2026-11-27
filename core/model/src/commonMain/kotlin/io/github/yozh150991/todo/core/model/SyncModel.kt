@@ -1,6 +1,8 @@
 package io.github.yozh150991.todo.core.model
 
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.intOrNull
 import kotlin.time.Instant
 
 /** spec §4.2 `OutboxOperation.status`. */
@@ -38,12 +40,27 @@ enum class ClaimStatus(val wire: String) {
  */
 enum class OperationType(val wire: String, val entity: EntityType) {
     PROJECT_CREATE("project.create", EntityType.PROJECT),
+
+    /** Name, description, colour, favourite, and the place in the tree (`parent_id`, `child_order`). */
+    PROJECT_UPDATE("project.update", EntityType.PROJECT),
+    PROJECT_ARCHIVE("project.archive", EntityType.PROJECT),
+    PROJECT_UNARCHIVE("project.unarchive", EntityType.PROJECT),
+
+    /** Carries `task_fate`; the tasks themselves get their own `task.move` / `task.delete` before it. */
+    PROJECT_DELETE("project.delete", EntityType.PROJECT),
+    PROJECT_RESTORE("project.restore", EntityType.PROJECT),
     TASK_CREATE("task.create", EntityType.TASK),
     TASK_UPDATE("task.update", EntityType.TASK),
+
+    /** `project_id`, `section_id`, `parent_id`, `child_order`; one operation per task of a moved subtree. */
+    TASK_MOVE("task.move", EntityType.TASK),
     TASK_COMPLETE("task.complete", EntityType.TASK),
     TASK_UNCOMPLETE("task.uncomplete", EntityType.TASK),
     TASK_DELETE("task.delete", EntityType.TASK),
     TASK_RESTORE("task.restore", EntityType.TASK),
+    REMINDER_CREATE("reminder.create", EntityType.REMINDER),
+    REMINDER_UPDATE("reminder.update", EntityType.REMINDER),
+    REMINDER_DELETE("reminder.delete", EntityType.REMINDER),
     ;
 
     companion object {
@@ -52,10 +69,41 @@ enum class OperationType(val wire: String, val entity: EntityType) {
     }
 }
 
+/**
+ * Format of `OutboxOperation.field_patch` (plan Ф1a §5): a JSON object of snake_case column names
+ * plus [KEY] with the payload version. After Ф5 the server reads it, so a change of shape gets a
+ * new version. Payloads written by Ф0 builds (v0.0.1, v0.0.2) have no [KEY]; their shape is
+ * version 1, so a missing key reads as 1.
+ */
+object OperationPayload {
+    const val KEY = "v"
+    const val VERSION = 1
+
+    fun versionOf(patch: JsonObject): Int =
+        patch[KEY]?.let { (it as? JsonPrimitive)?.intOrNull ?: error("Bad payload version: $it") } ?: VERSION
+}
+
 /** Activity events written from phase Ф1a onward (spec §5.8). */
 enum class ActivityEvent(val wire: String) {
     CREATED("created"),
+
+    /** Only the name changed (spec §5.8 «перейменування»). */
     CONTENT_CHANGED("content_changed"),
+    DESCRIPTION_CHANGED("description_changed"),
+    PRIORITY_CHANGED("priority_changed"),
+
+    /** `due_date`, `due_time` and/or `due_tz`. */
+    DUE_CHANGED("due_changed"),
+    DEADLINE_CHANGED("deadline_changed"),
+
+    /** `duration_min` and/or `duration_days`. */
+    DURATION_CHANGED("duration_changed"),
+
+    /** Several kinds of fields in one edit; `field_changes` lists each of them. */
+    UPDATED("updated"),
+
+    /** Project, parent, section or order changed (spec §5.8 «project»). */
+    MOVED("moved"),
     COMPLETED("completed"),
     UNCOMPLETED("uncompleted"),
     DELETED("deleted"),

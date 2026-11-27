@@ -103,15 +103,68 @@ data class Project(
     val deletedAt: Instant? = null,
 )
 
+/**
+ * What happens to the tasks of a deleted project (spec §5.2 «зрозумілий вибір долі задач»).
+ * The wire name goes into the `project.delete` payload.
+ */
+enum class ProjectTaskFate(val wire: String) {
+    /** Every open subtree goes to the end of the Inbox, keeping its order and hierarchy. */
+    MOVE_TO_INBOX("move_to_inbox"),
+
+    /** The tasks go to the bin together with the project; restoring the project brings them back. */
+    DELETE_WITH_PROJECT("delete_with_project"),
+    ;
+
+    companion object {
+        fun fromWire(value: String): ProjectTaskFate =
+            entries.firstOrNull { it.wire == value } ?: error("Unknown task fate: $value")
+    }
+}
+
 /** Why input was rejected. The UI turns the code into a localized message; the text is for logs. */
-enum class ValidationCode { BLANK_CONTENT, OTHER }
+enum class ValidationCode {
+    BLANK_CONTENT,
+    BLANK_NAME,
+
+    /** An explicitly typed one-off time falls into a DST gap (spec §4.0.1 п. 4, TIME-08). */
+    NONEXISTENT_LOCAL_TIME,
+
+    /** Deeper than [TaskRules.MAX_DEPTH], a cycle, or a parent in another project. */
+    HIERARCHY,
+
+    /** The system Inbox cannot be renamed, moved, archived or deleted (spec §5.2). */
+    INBOX_PROTECTED,
+
+    /** No new or moved-in tasks in an archived project. */
+    ARCHIVED_PROJECT,
+
+    /** The entity does not exist or is in the bin. */
+    NOT_FOUND,
+    OTHER,
+}
 
 class ValidationException(
     message: String,
     val code: ValidationCode = ValidationCode.OTHER,
 ) : IllegalArgumentException(message)
 
+object ProjectRules {
+    /** Projects need a name after trim, like tasks need content. */
+    fun normalizeName(raw: String): String {
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty()) throw ValidationException("Project name must not be blank", ValidationCode.BLANK_NAME)
+        return trimmed
+    }
+}
+
 object TaskRules {
+    /**
+     * Deepest allowed level: a top-level task has depth 0 and sub-tasks go four levels below it
+     * (spec §1.2 «до 4 рівнів», boundaries 0/1/4/5 in §12.2), the same as Todoist's four indent
+     * levels, so every imported tree fits.
+     */
+    const val MAX_DEPTH = 4
+
     /**
      * spec §4.1 `duration_min` and ADR-005 `duration_days`: positive when set, and a task has
      * minutes, days or neither — never both.
