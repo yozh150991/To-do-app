@@ -59,22 +59,30 @@ import org.jetbrains.compose.resources.stringResource
  * Each tab is a nested graph: its list, and — for the task lists — task details on top of it, so
  * Back from details returns to the list and every tab keeps its own back stack.
  */
-enum class Tab(val route: String, val label: StringResource, val icon: DrawableResource, val hasTasks: Boolean) {
-    Inbox("inbox", Res.string.tab_inbox, Res.drawable.ic_tab_inbox, hasTasks = true),
-    Today("today", Res.string.tab_today, Res.drawable.ic_tab_today, hasTasks = true),
-    Upcoming("upcoming", Res.string.tab_upcoming, Res.drawable.ic_tab_upcoming, hasTasks = true),
-    Browse("browse", Res.string.tab_browse, Res.drawable.ic_tab_browse, hasTasks = false),
+enum class Tab(val route: String, val label: StringResource, val icon: DrawableResource) {
+    Inbox("inbox", Res.string.tab_inbox, Res.drawable.ic_tab_inbox),
+    Today("today", Res.string.tab_today, Res.drawable.ic_tab_today),
+    Upcoming("upcoming", Res.string.tab_upcoming, Res.drawable.ic_tab_upcoming),
+
+    /** Browse → a project's tasks → task details. */
+    Browse("browse", Res.string.tab_browse, Res.drawable.ic_tab_browse),
     ;
 
     val listRoute: String get() = "$route/list"
 
-    /** Route pattern of task details over this tab's list. */
+    /** Route pattern of task details over this tab's list (or, in Browse, over a project). */
     val taskRoute: String get() = "$route/task/{$TASK_ID}"
 
     fun taskRoute(taskId: String): String = "$route/task/$taskId"
 
     companion object {
         const val TASK_ID = "taskId"
+        const val PROJECT_ID = "projectId"
+
+        /** A project's tasks, opened from Browse. */
+        const val PROJECT_ROUTE = "browse/project/{$PROJECT_ID}"
+
+        fun projectRoute(projectId: String): String = "browse/project/$projectId"
     }
 }
 
@@ -99,6 +107,9 @@ class TaskListSlot(
     val addTask: (QuickAddContext) -> Unit,
 )
 
+/** What Browse gets from the navigation. */
+class BrowseSlot(val openProject: (String) -> Unit, val openAbout: () -> Unit)
+
 /**
  * A request to show a task's details: from a reminder notification (Ф1a PR 7), the "Open" action
  * of Quick Add, a deep link. [nonce] makes the same task open again when asked twice.
@@ -117,6 +128,9 @@ private val DetailPaneWidth = 400.dp
  * Top-level navigation. Each tab keeps its own back stack and scroll position; Back from task
  * details returns to the list, from the root of another tab to the start tab, and from the start
  * tab leaves the app (UX_SPEC §2.1). With a single visible tab there is no navigation bar at all.
+ *
+ * The screens come in as slots, so tests can put stand-ins; a slot left null shows the Ф0
+ * placeholder (Today, Upcoming) or a Browse with "About" only.
  */
 @Composable
 fun AppNavigation(
@@ -124,9 +138,14 @@ fun AppNavigation(
     onOpenAbout: () -> Unit,
     inbox: @Composable (TaskListSlot) -> Unit,
     modifier: Modifier = Modifier,
+    todayList: (@Composable (TaskListSlot) -> Unit)? = null,
+    upcomingList: (@Composable (TaskListSlot) -> Unit)? = null,
+    browse: (@Composable (BrowseSlot) -> Unit)? = null,
+    /** A project's tasks: project ID, the list slot, and Back. */
+    project: (@Composable (String, TaskListSlot, () -> Unit) -> Unit)? = null,
     taskDetail: @Composable (taskId: String, onClose: () -> Unit) -> Unit = { _, _ -> },
     onAddTask: (QuickAddContext) -> Unit = {},
-    /** Today's date for the context of Quick Add opened from Today. */
+    /** Today's date for the context of Quick Add opened from the Today placeholder. */
     today: () -> LocalDate? = { null },
     openTask: TaskLink? = null,
     navController: NavHostController = rememberNavController(),
@@ -149,11 +168,13 @@ fun AppNavigation(
         }
     }
 
-    /** Details over the list of [tab] — replacing details already open there, so Back goes to the list. */
+    fun isTaskRoute(e: NavBackStackEntry?): Boolean = e?.destination?.route?.let { route -> Tab.entries.any { it.taskRoute == route } } == true
+
+    /** Details over the current list of [tab] — replacing details already open there, so Back goes to the list. */
     fun openTaskIn(tab: Tab, taskId: String) {
-        val target = if (tab.hasTasks) tab else start
-        if (target != tabOf(navController.currentBackStackEntry)) open(target)
-        navController.navigate(target.taskRoute(taskId)) { popUpTo(target.listRoute) }
+        if (tab != tabOf(navController.currentBackStackEntry)) open(tab)
+        if (isTaskRoute(navController.currentBackStackEntry)) navController.popBackStack()
+        navController.navigate(tab.taskRoute(taskId))
     }
 
     LaunchedEffect(openTask) {
@@ -163,47 +184,60 @@ fun AppNavigation(
         openTaskIn(tabOf(navController.currentBackStackEntry), link.taskId)
     }
 
-    val list: @Composable (Tab, String?) -> Unit = { tab, selectedTaskId ->
+    /** The list a back stack entry shows, with [selectedTaskId] highlighted (null: none). */
+    val listContent: @Composable (Tab, NavBackStackEntry, String?) -> Unit = { tab, listEntry, selectedTaskId ->
         val slot = TaskListSlot(
             selectedTaskId = selectedTaskId,
             openTask = { id -> openTaskIn(tab, id) },
             addTask = onAddTask,
         )
-        when (tab) {
-            Tab.Inbox -> inbox(slot)
-            Tab.Today -> PlaceholderScreen(tab, onAdd = { onAddTask(QuickAddContext(date = today(), today = today())) })
-            Tab.Upcoming -> PlaceholderScreen(tab, onAdd = { onAddTask(QuickAddContext(today = today())) })
-            Tab.Browse -> BrowseScreen(onOpenAbout = onOpenAbout)
+        when {
+            listEntry.destination.route == Tab.PROJECT_ROUTE -> {
+                val projectId = listEntry.savedStateHandle.get<String>(Tab.PROJECT_ID).orEmpty()
+                project?.invoke(projectId, slot) { navController.popBackStack() }
+            }
+            tab == Tab.Inbox -> inbox(slot)
+            tab == Tab.Today -> todayList?.invoke(slot)
+                ?: PlaceholderScreen(tab, onAdd = { onAddTask(QuickAddContext(date = today(), today = today())) })
+            tab == Tab.Upcoming -> upcomingList?.invoke(slot)
+                ?: PlaceholderScreen(tab, onAdd = { onAddTask(QuickAddContext(today = today())) })
+            else -> {
+                val browseSlot = BrowseSlot(
+                    openProject = { id -> navController.navigate(Tab.projectRoute(id)) },
+                    openAbout = onOpenAbout,
+                )
+                browse?.invoke(browseSlot) ?: BrowseScreen(onOpenAbout = onOpenAbout)
+            }
         }
     }
 
     fun NavGraphBuilder.tabGraph(tab: Tab) {
         navigation(startDestination = tab.listRoute, route = tab.route) {
-            composable(tab.listRoute) { list(tab, null) }
-            if (tab.hasTasks) {
-                composable(tab.taskRoute) { taskEntry ->
-                    val taskId = taskEntry.savedStateHandle.get<String>(Tab.TASK_ID).orEmpty()
-                    val close: () -> Unit = { navController.popBackStack() }
-                    BoxWithConstraints(Modifier.fillMaxSize()) {
-                        if (maxWidth >= ListDetailWidth) {
-                            // The list keeps its own view model (that of the list entry below).
-                            val listEntry: NavBackStackEntry = remember(taskEntry) {
-                                runCatching { navController.getBackStackEntry(tab.listRoute) }.getOrDefault(taskEntry)
-                            }
-                            Row(Modifier.fillMaxSize()) {
-                                Box(Modifier.weight(1f).fillMaxHeight()) {
-                                    CompositionLocalProvider(LocalViewModelStoreOwner provides listEntry) {
-                                        list(tab, taskId)
-                                    }
-                                }
-                                VerticalDivider()
-                                Box(Modifier.width(DetailPaneWidth).fillMaxHeight().testTag("detail-pane")) {
-                                    taskDetail(taskId, close)
+            composable(tab.listRoute) { listEntry -> listContent(tab, listEntry, null) }
+            if (tab == Tab.Browse) {
+                composable(Tab.PROJECT_ROUTE) { projectEntry -> listContent(tab, projectEntry, null) }
+            }
+            composable(tab.taskRoute) { taskEntry ->
+                val taskId = taskEntry.savedStateHandle.get<String>(Tab.TASK_ID).orEmpty()
+                val close: () -> Unit = { navController.popBackStack() }
+                BoxWithConstraints(Modifier.fillMaxSize()) {
+                    // The list under the details: the tab's list, or in Browse the project it was opened from.
+                    val below: NavBackStackEntry? = remember(taskEntry) { navController.previousBackStackEntry }
+                    if (maxWidth >= ListDetailWidth && below != null && below.destination.route != tab.taskRoute) {
+                        Row(Modifier.fillMaxSize()) {
+                            Box(Modifier.weight(1f).fillMaxHeight()) {
+                                // The list keeps its own view model: that of its entry below.
+                                CompositionLocalProvider(LocalViewModelStoreOwner provides below) {
+                                    listContent(tab, below, taskId)
                                 }
                             }
-                        } else {
-                            taskDetail(taskId, close)
+                            VerticalDivider()
+                            Box(Modifier.width(DetailPaneWidth).fillMaxHeight().testTag("detail-pane")) {
+                                taskDetail(taskId, close)
+                            }
                         }
+                    } else {
+                        taskDetail(taskId, close)
                     }
                 }
             }

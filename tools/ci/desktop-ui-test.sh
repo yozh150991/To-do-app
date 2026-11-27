@@ -115,8 +115,9 @@ WORKSPACE=$(sql 'SELECT workspace_id FROM local_workspace')
 
 # --- second start on the same data -----------------------------------------------------------
 start_app restart
-# "About" sits at the right end of the top bar: the dialog reads SQLite facts through Room.
-xdotool mousemove --window "$WID" $((WIDTH - 45)) 32 click 1 >> "$LOG" 2>&1
+# "About" sits in the top bar left of the screen menu (the 48 px "⋮" at the right end, 4 px in);
+# the dialog reads SQLite facts through Room.
+xdotool mousemove --window "$WID" $((WIDTH - 84)) 32 click 1 >> "$LOG" 2>&1
 sleep 3
 import -window root "$SHOTS/about.png" 2>> "$LOG" || true
 kill -0 "$APP_PID" 2>/dev/null || fail "the app exited after opening About"

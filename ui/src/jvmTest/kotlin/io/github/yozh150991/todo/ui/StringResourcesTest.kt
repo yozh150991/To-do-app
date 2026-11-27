@@ -50,4 +50,33 @@ class StringResourcesTest {
             load(language).forEach { (key, text) -> assertTrue(text.isNotBlank(), "$key is empty in $language") }
         }
     }
+
+    /** Plurals: the same keys everywhere, an "other" form each, and the placeholder of the default. */
+    @Test
+    fun pluralsExistInEveryLanguage() {
+        fun plurals(dir: String): Map<String, Map<String, String>> {
+            val nodes = DocumentBuilderFactory.newInstance().newDocumentBuilder()
+                .parse(File(root, "$dir/strings.xml")).getElementsByTagName("plurals")
+            return (0 until nodes.length).associate { i ->
+                val element = nodes.item(i) as Element
+                val items = element.getElementsByTagName("item")
+                element.getAttribute("name") to (0 until items.length).associate { j ->
+                    val item = items.item(j) as Element
+                    item.getAttribute("quantity") to item.textContent
+                }
+            }
+        }
+        val base = plurals("values")
+        (listOf("values") + languages).forEach { language ->
+            val forms = plurals(language)
+            assertEquals(base.keys, forms.keys, "plurals of $language")
+            forms.forEach { (key, items) ->
+                assertTrue("other" in items, "$key has no 'other' form in $language")
+                val expected = placeholder.findAll(base.getValue(key).getValue("other")).map { it.value }.toSet()
+                items.forEach { (quantity, text) ->
+                    assertEquals(expected, placeholder.findAll(text).map { it.value }.toSet(), "$key/$quantity in $language")
+                }
+            }
+        }
+    }
 }

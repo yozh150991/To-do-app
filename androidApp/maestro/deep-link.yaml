@@ -5,8 +5,8 @@ appId: io.github.yozh150991.todo.debug
 ---
 - launchApp:
     clearState: true
-- assertVisible: "Overdue tasks and tasks for today will appear here."
+- assertVisible: "All done for today"
 - openLink: "io.github.yozh150991.todo.debug://task/missing"
 - assertVisible: "This task no longer exists"
 - back
-- assertVisible: "Overdue tasks and tasks for today will appear here."
+- assertVisible: "All done for today"

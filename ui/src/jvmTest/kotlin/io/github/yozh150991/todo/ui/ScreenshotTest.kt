@@ -29,6 +29,15 @@ import io.github.yozh150991.todo.ui.inbox.InboxScreen
 import io.github.yozh150991.todo.ui.inbox.InboxViewModel
 import io.github.yozh150991.todo.ui.navigation.AppNavigation
 import io.github.yozh150991.todo.ui.navigation.TaskLink
+import io.github.yozh150991.todo.ui.navigation.BrowseScreen
+import io.github.yozh150991.todo.ui.tasklist.DayTicker
+import io.github.yozh150991.todo.ui.tasklist.projectTree
+import io.github.yozh150991.todo.ui.today.TodayScreen
+import io.github.yozh150991.todo.ui.today.TodayViewModel
+import io.github.yozh150991.todo.ui.upcoming.UpcomingScreen
+import io.github.yozh150991.todo.ui.upcoming.UpcomingViewModel
+import kotlinx.coroutines.flow.first
+import kotlinx.datetime.toInstant
 import io.github.yozh150991.todo.ui.quickadd.QuickAddContent
 import io.github.yozh150991.todo.ui.quickadd.QuickAddContext
 import io.github.yozh150991.todo.ui.quickadd.QuickAddUiState
@@ -236,5 +245,77 @@ class ScreenshotTest {
             waitUntil(timeoutMillis = 15_000) { onAllNodesWithText(titles[2]).fetchSemanticsNodes().isNotEmpty() }
             onNodeWithTag("frame").captureRoboImage(Baselines.path("list-detail-tablet-uk"))
         }
+    }
+
+    private val fixedDays = DayTicker(
+        object : kotlin.time.Clock {
+            override fun now(): kotlin.time.Instant =
+                kotlinx.datetime.LocalDateTime(2026, 11, 21, 10, 0).toInstant(io.github.yozh150991.todo.core.model.TimeZones.of("Europe/Warsaw"))
+        },
+    ) { io.github.yozh150991.todo.core.model.TimeZones.of("Europe/Warsaw") }
+
+    /** Today with overdue, timed, prioritised tasks and a deadline (UX_SPEC §3.1). */
+    @Test
+    fun todayUkrainian() {
+        Locale.setDefault(Locale.forLanguageTag("uk"))
+        val repository = repository("today")
+        runBlocking {
+            val home = repository.projects.create("Дім")
+            repository.createTask("Сплатити комуналку", priority = Priority.P1, due = Due(LocalDate(2026, 11, 19)))
+            repository.createTask("Зустріч із бухгалтером", due = Due(LocalDate(2026, 11, 21), LocalTime(9, 30)), deadline = LocalDate(2026, 11, 24))
+            repository.createTask("Полити квіти", projectId = home.id, priority = Priority.P3, due = Due(LocalDate(2026, 11, 21)), description = "Фікус і монстера")
+            repository.createTask("Здати звіт", priority = Priority.P2, deadline = LocalDate(2026, 11, 21))
+        }
+        val viewModel = TodayViewModel(repository, fixedDays)
+        runComposeUiTest {
+            setContent { AppTheme { Box(Modifier.size(390.dp, 700.dp).testTag("frame")) { TodayScreen(viewModel, onAddTask = {}, onOpenTask = {}) } } }
+            waitUntil(timeoutMillis = 15_000) { onAllNodesWithText("Здати звіт").fetchSemanticsNodes().isNotEmpty() }
+            onNodeWithTag("frame").captureRoboImage(Baselines.path("today-phone-uk"))
+        }
+        Baselines.verify("today-phone-uk")
+    }
+
+    /** Upcoming: the week strip and every day, empty ones included (owner's decision, plan Ф1a §8). */
+    @Test
+    fun upcomingUkrainian() {
+        Locale.setDefault(Locale.forLanguageTag("uk"))
+        val repository = repository("upcoming")
+        runBlocking {
+            repository.createTask("Купити подарунок", due = Due(LocalDate(2026, 11, 22)))
+            repository.createTask("Стоматолог", priority = Priority.P2, due = Due(LocalDate(2026, 11, 24), LocalTime(15, 0)))
+            repository.createTask("Відпустка", due = Due(LocalDate(2026, 11, 27)))
+        }
+        val viewModel = UpcomingViewModel(repository, fixedDays)
+        runComposeUiTest {
+            setContent { AppTheme { Box(Modifier.size(390.dp, 700.dp).testTag("frame")) { UpcomingScreen(viewModel, onAddTask = {}, onOpenTask = {}) } } }
+            waitUntil(timeoutMillis = 15_000) { onAllNodesWithText("Стоматолог").fetchSemanticsNodes().isNotEmpty() }
+            onNodeWithTag("frame").captureRoboImage(Baselines.path("upcoming-phone-uk"))
+        }
+        Baselines.verify("upcoming-phone-uk")
+    }
+
+    /** Browse with nested projects (UX_SPEC §3.2). */
+    @Test
+    fun browseUkrainian() {
+        Locale.setDefault(Locale.forLanguageTag("uk"))
+        val repository = repository("browse")
+        val projects = runBlocking {
+            val work = repository.projects.create("Робота")
+            repository.projects.create("Звіти", parentId = work.id)
+            repository.projects.create("Дім")
+            repository.projects.observeActive().first().filterNot { it.isInbox }
+        }
+        runComposeUiTest {
+            setContent {
+                AppTheme {
+                    Box(Modifier.size(390.dp, 500.dp).testTag("frame")) {
+                        BrowseScreen(onOpenAbout = {}, projects = projectTree(projects))
+                    }
+                }
+            }
+            onNodeWithText("Звіти").assertExists()
+            onNodeWithTag("frame").captureRoboImage(Baselines.path("browse-phone-uk"))
+        }
+        Baselines.verify("browse-phone-uk")
     }
 }

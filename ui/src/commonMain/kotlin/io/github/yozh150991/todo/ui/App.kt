@@ -16,10 +16,21 @@ import io.github.yozh150991.todo.ui.about.AboutDialog
 import io.github.yozh150991.todo.ui.about.AboutViewModel
 import io.github.yozh150991.todo.ui.inbox.InboxScreen
 import io.github.yozh150991.todo.ui.inbox.InboxViewModel
+import io.github.yozh150991.todo.ui.inbox.ProjectTasksScreen
+import io.github.yozh150991.todo.ui.inbox.ProjectViewModel
+import io.github.yozh150991.todo.ui.navigation.BrowseScreen
+import io.github.yozh150991.todo.ui.navigation.BrowseViewModel
+import io.github.yozh150991.todo.ui.tasklist.DayTicker
+import io.github.yozh150991.todo.ui.today.TodayScreen
+import io.github.yozh150991.todo.ui.today.TodayViewModel
+import io.github.yozh150991.todo.ui.upcoming.UpcomingScreen
+import io.github.yozh150991.todo.ui.upcoming.UpcomingViewModel
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.yozh150991.todo.core.model.TimeZones
 import io.github.yozh150991.todo.ui.navigation.AppNavigation
 import io.github.yozh150991.todo.ui.navigation.TaskLink
-import io.github.yozh150991.todo.ui.quickadd.QuickAddContext
 import io.github.yozh150991.todo.ui.quickadd.QuickAddHost
 import io.github.yozh150991.todo.ui.quickadd.QuickAddViewModel
 import io.github.yozh150991.todo.ui.task.TaskDetailScreen
@@ -37,7 +48,12 @@ import kotlin.time.Clock
  * (LocalStoreProvider), TaskRepository and AppInfo.
  */
 val uiModule = module {
-    viewModelOf(::InboxViewModel)
+    single { DayTicker(Clock.System) { TimeZones.systemDefault() } }
+    viewModel { InboxViewModel(get(), get()) }
+    viewModel { params -> ProjectViewModel(params.get(), get(), get()) }
+    viewModel { TodayViewModel(get(), get()) }
+    viewModel { UpcomingViewModel(get(), get()) }
+    viewModelOf(::BrowseViewModel)
     viewModelOf(::AboutViewModel)
     viewModelOf(::QuickAddViewModel)
     viewModel { params -> TaskDetailViewModel(params.get(), get()) }
@@ -82,9 +98,30 @@ fun App(features: FeatureFlags = FeatureFlags.Release, openTask: TaskLink? = nul
                 InboxScreen(
                     viewModel = koinViewModel<InboxViewModel>(),
                     onOpenAbout = { aboutOpen = true },
-                    onAddTask = { slot.addTask(QuickAddContext()) },
+                    onAddTask = slot.addTask,
                     onOpenTask = slot.openTask,
                     selectedTaskId = slot.selectedTaskId,
+                )
+            },
+            todayList = { slot ->
+                TodayScreen(koinViewModel<TodayViewModel>(), slot.addTask, slot.openTask, selectedTaskId = slot.selectedTaskId)
+            },
+            upcomingList = { slot ->
+                UpcomingScreen(koinViewModel<UpcomingViewModel>(), slot.addTask, slot.openTask, selectedTaskId = slot.selectedTaskId)
+            },
+            browse = { slot ->
+                val browse = koinViewModel<BrowseViewModel>()
+                val projects by browse.projects.collectAsStateWithLifecycle()
+                BrowseScreen(onOpenAbout = slot.openAbout, projects = projects, onOpenProject = slot.openProject)
+            },
+            project = { projectId, slot, onBack ->
+                ProjectTasksScreen(
+                    viewModel = koinViewModel<ProjectViewModel>(key = "project-$projectId") { parametersOf(projectId) },
+                    modifier = Modifier.testTag("screen-project"),
+                    onAddTask = slot.addTask,
+                    onOpenTask = slot.openTask,
+                    selectedTaskId = slot.selectedTaskId,
+                    onBack = onBack,
                 )
             },
             taskDetail = { taskId, onClose ->
