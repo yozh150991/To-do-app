@@ -88,6 +88,11 @@ class TaskRepository(
 
     suspend fun getTask(id: String): Task? = store().tasks.getById(id)?.toDomain()
 
+    /** The task as it changes; null when it does not exist. Binned tasks are emitted with [Task.deletedAt]. */
+    fun observeTask(id: String): Flow<Task?> = flow {
+        emitAll(store().tasks.observeById(id).map { row -> row?.toDomain() })
+    }
+
     /** Direct sub-tasks that are not in the bin, in list order. */
     suspend fun subtasks(parentId: String): List<Task> =
         store().tasks.children(parentId).filter { it.deletedAt == null }.map(TaskEntity::toDomain)

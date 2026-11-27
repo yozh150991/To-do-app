@@ -60,7 +60,9 @@ compose.resources {
     packageOfResClass = "io.github.yozh150991.todo.ui.resources"
 }
 
-// Roborazzi writes screenshots only in record mode; CI keeps them as evidence (no baseline yet).
+// Roborazzi records every screenshot; the tests compare it with the committed baseline in
+// ui/screenshots/ (ui/src/jvmTest/.../Baselines.kt). New screenshots go base64-encoded to
+// build/reports/new-baselines/, which CI prints into the job log to be committed.
 tasks.withType<Test>().configureEach {
     // Full exception messages in the CI log: the test reports are only in the artifacts.
     testLogging {
@@ -69,4 +71,8 @@ tasks.withType<Test>().configureEach {
     }
     systemProperty("roborazzi.test.record", "true")
     systemProperty("roborazzi.output.dir", layout.buildDirectory.dir("outputs/roborazzi").get().asFile.absolutePath)
+    systemProperty("todo.baselineDir", layout.projectDirectory.dir("screenshots").asFile.absolutePath)
+    systemProperty("todo.newBaselineDir", layout.buildDirectory.dir("reports/new-baselines").get().asFile.absolutePath)
+    systemProperty("todo.reportDir", layout.buildDirectory.dir("reports/runtime-evidence").get().asFile.absolutePath)
+    inputs.dir(layout.projectDirectory.dir("screenshots")).optional().withPropertyName("screenshotBaselines")
 }

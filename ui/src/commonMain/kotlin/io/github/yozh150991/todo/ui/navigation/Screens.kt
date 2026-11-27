@@ -14,16 +14,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import io.github.yozh150991.todo.ui.quickadd.AddTaskButton
 import io.github.yozh150991.todo.ui.resources.Res
 import io.github.yozh150991.todo.ui.resources.about
 import io.github.yozh150991.todo.ui.resources.today_placeholder
 import io.github.yozh150991.todo.ui.resources.upcoming_placeholder
 import org.jetbrains.compose.resources.stringResource
 
-/** Today and Upcoming until their lists arrive in Ф1a; visible only in development builds. */
+/**
+ * Today and Upcoming until their lists arrive in Ф1a PR 3; visible only in development builds.
+ * The "+" button already opens Quick Add with the screen's context.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun PlaceholderScreen(tab: Tab) {
+internal fun PlaceholderScreen(tab: Tab, onAdd: () -> Unit) {
     val text = when (tab) {
         Tab.Today -> Res.string.today_placeholder
         Tab.Upcoming -> Res.string.upcoming_placeholder
@@ -32,6 +36,7 @@ internal fun PlaceholderScreen(tab: Tab) {
     Scaffold(
         modifier = Modifier.testTag("screen-${tab.route}"),
         topBar = { TopAppBar(title = { Text(stringResource(tab.label)) }) },
+        floatingActionButton = { AddTaskButton(onClick = onAdd) },
     ) { padding ->
         Text(
             text = stringResource(text),

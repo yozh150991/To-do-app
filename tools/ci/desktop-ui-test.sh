@@ -86,10 +86,11 @@ start_app() { # $1 = label; sets APP_PID and WID
 
 # --- first start: type a task into the real window --------------------------------------------
 start_app first-start
-# InboxScreen: the new-task field sits under the 64dp top bar, 16dp from the left; density 1 on Xvfb.
+# The "+" button sits 16dp from the bottom-right corner (56dp FAB; density 1 on Xvfb) and opens
+# Quick Add with the field focused (UX_SPEC §3.4).
 xdotool windowactivate --sync "$WID" >> "$LOG" 2>&1 || xdotool windowfocus --sync "$WID" >> "$LOG" 2>&1 || true
-xdotool mousemove --window "$WID" 200 92 click 1 >> "$LOG" 2>&1
-sleep 1
+xdotool mousemove --window "$WID" $((WIDTH - 44)) $((HEIGHT - 44)) click 1 >> "$LOG" 2>&1
+sleep 2
 xdotool type --delay 40 "$TASK_TEXT" >> "$LOG" 2>&1
 xdotool key Return >> "$LOG" 2>&1
 sleep 3

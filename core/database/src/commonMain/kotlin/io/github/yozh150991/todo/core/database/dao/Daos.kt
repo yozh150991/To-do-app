@@ -81,6 +81,10 @@ interface TaskDao {
     @Query("SELECT * FROM task WHERE id = :id")
     suspend fun getById(id: String): TaskEntity?
 
+    /** One task, re-emitted on every change (task details). */
+    @Query("SELECT * FROM task WHERE id = :id")
+    fun observeById(id: String): Flow<TaskEntity?>
+
     @Query(
         """
         SELECT * FROM task

@@ -26,4 +26,17 @@
     <string name="tab_browse">Przegląd</string>
     <string name="today_placeholder">Tu pojawią się zaległe i dzisiejsze zadania.</string>
     <string name="upcoming_placeholder">Tu pojawią się zadania na najbliższe dni.</string>
+    <string name="add_task_fab">Dodaj zadanie</string>
+    <string name="empty_inbox_hint">Naciśnij +, aby dodać</string>
+    <string name="quick_add_added">Dodano: %1$s</string>
+    <string name="quick_add_open">Otwórz</string>
+    <string name="quick_add_for_today">Na dziś</string>
+    <string name="quick_add_for_date">Na %1$s</string>
+    <string name="task_not_found">To zadanie już nie istnieje</string>
+    <string name="task_project">Projekt: %1$s</string>
+    <string name="task_due">Data: %1$s</string>
+    <string name="task_deadline">Termin: %1$s</string>
+    <string name="task_priority">Priorytet %1$d</string>
+    <string name="task_no_date">Bez daty</string>
+    <string name="task_completed">Ukończone</string>
 </resources>

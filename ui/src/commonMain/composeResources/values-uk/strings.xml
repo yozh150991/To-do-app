@@ -26,4 +26,17 @@
     <string name="tab_browse">Огляд</string>
     <string name="today_placeholder">Тут будуть прострочені й сьогоднішні задачі.</string>
     <string name="upcoming_placeholder">Тут будуть задачі на найближчі дні.</string>
+    <string name="add_task_fab">Додати задачу</string>
+    <string name="empty_inbox_hint">Натисніть +, щоб додати</string>
+    <string name="quick_add_added">Додано: %1$s</string>
+    <string name="quick_add_open">Відкрити</string>
+    <string name="quick_add_for_today">На сьогодні</string>
+    <string name="quick_add_for_date">На %1$s</string>
+    <string name="task_not_found">Цієї задачі вже немає</string>
+    <string name="task_project">Проєкт: %1$s</string>
+    <string name="task_due">Дата: %1$s</string>
+    <string name="task_deadline">Дедлайн: %1$s</string>
+    <string name="task_priority">Пріоритет %1$d</string>
+    <string name="task_no_date">Без дати</string>
+    <string name="task_completed">Виконано</string>
 </resources>
