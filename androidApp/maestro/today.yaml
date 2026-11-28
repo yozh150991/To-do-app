@@ -1,0 +1,23 @@
+# Today (docs/UX_SPEC.md §3.1; Ф1a PR 3): "+" on Today adds a task for today, the task shows in the
+# "Today" group, completing it shows "Completed: …" with Undo, and Undo brings it back.
+appId: io.github.yozh150991.todo.debug
+---
+- launchApp:
+    clearState: true
+- assertVisible: "All done for today"
+- tapOn: "Add task"
+- assertVisible: "For today"
+- inputText: "Water the plants"
+- tapOn: "Add"
+- assertVisible: "Added: Water the plants"
+- tapOn: "Open"
+- assertVisible: "Project: Inbox"
+- back
+- assertVisible: "Water the plants"
+- assertNotVisible: "All done for today"
+- takeScreenshot: today
+- tapOn: "Complete “Water the plants”, priority 4"
+- assertVisible: "Completed: Water the plants"
+- tapOn: "Undo"
+- assertVisible: "Water the plants"
+- assertNotVisible: "All done for today"

@@ -7,7 +7,8 @@ import androidx.room3.Index
 import androidx.room3.PrimaryKey
 
 /*
- * Schema v2 (spec v2.6.1 §4, phase Ф0): v1 + `section`, `label`, `task_label`, FK `task.section_id`.
+ * Schema v3 (phase Ф1a): v2 + `task.duration_days` (ADR-005), `reminder`, `reminder_delivery`,
+ * `deferred_todoist_node`. Schema v2 (Ф0): v1 + `section`, `label`, `task_label`, FK `task.section_id`.
  *
  * Storage conventions (docs/DATA_MODEL.md):
  * - IDs are client-generated UUID strings.
@@ -134,6 +135,8 @@ data class TaskEntity(
     @ColumnInfo(name = "created_at") val createdAt: Long,
     @ColumnInfo(name = "updated_at") val updatedAt: Long,
     @ColumnInfo(name = "deleted_at") val deletedAt: Long?,
+    /** Schema v3, ADR-005: whole days from `due_date` on; never together with `duration_min` (checked in the domain). */
+    @ColumnInfo(name = "duration_days") val durationDays: Int? = null,
 )
 
 /** spec §4.2 `TaskActivity`: survives the task (no FK) so history outlives deletes. */
@@ -258,4 +261,83 @@ data class TaskLabelEntity(
     @ColumnInfo(name = "task_id") val taskId: String,
     @ColumnInfo(name = "label_id") val labelId: String,
     @ColumnInfo(name = "created_at") val createdAt: Long,
+)
+
+/**
+ * spec §4.2 `Reminder` (schema v3), synced. `remind_at` is UTC epoch milliseconds for absolute
+ * reminders; `offset_min` counts back from the task's due time for relative ones.
+ */
+@Entity(
+    tableName = "reminder",
+    foreignKeys = [
+        ForeignKey(
+            entity = TaskEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["task_id"],
+        ),
+    ],
+    indices = [Index(value = ["task_id"]), Index(value = ["deleted_at"])],
+)
+data class ReminderEntity(
+    @PrimaryKey @ColumnInfo(name = "id") val id: String,
+    @ColumnInfo(name = "task_id") val taskId: String,
+    @ColumnInfo(name = "type") val type: String,
+    @ColumnInfo(name = "scope") val scope: String,
+    @ColumnInfo(name = "occurrence_id") val occurrenceId: String?,
+    @ColumnInfo(name = "remind_at") val remindAt: Long?,
+    @ColumnInfo(name = "offset_min") val offsetMin: Int?,
+    @ColumnInfo(name = "enabled") val enabled: Boolean,
+    @ColumnInfo(name = "is_auto") val isAuto: Boolean,
+    @ColumnInfo(name = "repeat_rule") val repeatRule: String?,
+    @ColumnInfo(name = "stop_on_task_complete") val stopOnTaskComplete: Boolean,
+    @ColumnInfo(name = "revision") val revision: Long?,
+    @ColumnInfo(name = "created_at") val createdAt: Long,
+    @ColumnInfo(name = "updated_at") val updatedAt: Long,
+    @ColumnInfo(name = "deleted_at") val deletedAt: Long?,
+)
+
+/**
+ * spec §4.2 `ReminderDelivery` (schema v3): local only, never in the outbox. One row per planned
+ * alarm of this device; the row id is the stable key for the platform alarm.
+ */
+@Entity(
+    tableName = "reminder_delivery",
+    foreignKeys = [
+        ForeignKey(
+            entity = ReminderEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["reminder_id"],
+        ),
+    ],
+    indices = [Index(value = ["reminder_id"]), Index(value = ["planned_at"])],
+)
+data class ReminderDeliveryEntity(
+    @PrimaryKey @ColumnInfo(name = "id") val id: String,
+    @ColumnInfo(name = "reminder_id") val reminderId: String,
+    @ColumnInfo(name = "occurrence_id") val occurrenceId: String?,
+    @ColumnInfo(name = "device_id") val deviceId: String,
+    @ColumnInfo(name = "planned_at") val plannedAt: Long,
+    @ColumnInfo(name = "fired_at") val firedAt: Long?,
+    @ColumnInfo(name = "snoozed_until") val snoozedUntil: Long?,
+    @ColumnInfo(name = "dismissed_at") val dismissedAt: Long?,
+)
+
+/**
+ * spec §4.2 `DeferredTodoistNode` (schema v3, FIX-02): metadata of a Todoist task left out of the
+ * Ф1a import with its recurring root. No foreign keys: none of these rows has a local task yet.
+ */
+@Entity(
+    tableName = "deferred_todoist_node",
+    indices = [Index(value = ["root_recurring_source_id"]), Index(value = ["import_run_id"])],
+)
+data class DeferredTodoistNodeEntity(
+    @PrimaryKey @ColumnInfo(name = "source_id") val sourceId: String,
+    @ColumnInfo(name = "source_parent_id") val sourceParentId: String?,
+    @ColumnInfo(name = "source_project_id") val sourceProjectId: String?,
+    @ColumnInfo(name = "source_section_id") val sourceSectionId: String?,
+    @ColumnInfo(name = "root_recurring_source_id") val rootRecurringSourceId: String,
+    @ColumnInfo(name = "depth") val depth: Int,
+    @ColumnInfo(name = "deferred_reason") val deferredReason: String,
+    @ColumnInfo(name = "source_hash") val sourceHash: String,
+    @ColumnInfo(name = "import_run_id") val importRunId: String,
 )

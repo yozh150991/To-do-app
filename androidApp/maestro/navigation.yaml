@@ -5,16 +5,16 @@ appId: io.github.yozh150991.todo.debug
 ---
 - launchApp:
     clearState: true
-- assertVisible: "Overdue tasks and tasks for today will appear here."
+- assertVisible: "All done for today"
 - takeScreenshot: today
 - tapOn: "Upcoming"
-- assertVisible: "Tasks for the coming days will appear here."
+- assertVisible: "Nothing planned"
 - back
-- assertVisible: "Overdue tasks and tasks for today will appear here."
+- assertVisible: "All done for today"
 - tapOn: "Browse"
 - tapOn: "About"
 - assertVisible: "SQLite 3.*"
 - tapOn: "Close"
 - tapOn: "Today"
 - back
-- assertNotVisible: "Overdue tasks and tasks for today will appear here."
+- assertNotVisible: "All done for today"

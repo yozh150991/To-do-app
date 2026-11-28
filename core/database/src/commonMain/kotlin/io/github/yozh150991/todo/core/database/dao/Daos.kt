@@ -4,11 +4,14 @@ import androidx.room3.Dao
 import androidx.room3.Insert
 import androidx.room3.Query
 import androidx.room3.Update
+import io.github.yozh150991.todo.core.database.entity.DeferredTodoistNodeEntity
 import io.github.yozh150991.todo.core.database.entity.ExternalIdentityEntity
 import io.github.yozh150991.todo.core.database.entity.LabelEntity
 import io.github.yozh150991.todo.core.database.entity.LocalWorkspaceEntity
 import io.github.yozh150991.todo.core.database.entity.OutboxOperationEntity
 import io.github.yozh150991.todo.core.database.entity.ProjectEntity
+import io.github.yozh150991.todo.core.database.entity.ReminderDeliveryEntity
+import io.github.yozh150991.todo.core.database.entity.ReminderEntity
 import io.github.yozh150991.todo.core.database.entity.SectionEntity
 import io.github.yozh150991.todo.core.database.entity.TaskActivityEntity
 import io.github.yozh150991.todo.core.database.entity.TaskEntity
@@ -39,8 +42,29 @@ interface ProjectDao {
     @Query("SELECT * FROM project WHERE id = :id")
     suspend fun getById(id: String): ProjectEntity?
 
+    @Update
+    suspend fun update(project: ProjectEntity): Int
+
     @Query("SELECT * FROM project WHERE is_inbox = 1 AND deleted_at IS NULL")
     suspend fun getInbox(): ProjectEntity?
+
+    /** Direct sub-projects, including archived and deleted ones (callers filter). */
+    @Query("SELECT * FROM project WHERE parent_id = :parentId ORDER BY child_order, id")
+    suspend fun children(parentId: String): List<ProjectEntity>
+
+    @Query("SELECT MAX(child_order) FROM project WHERE parent_id IS NULL")
+    suspend fun lastTopLevelOrder(): String?
+
+    @Query("SELECT MAX(child_order) FROM project WHERE parent_id = :parentId")
+    suspend fun lastChildOrder(parentId: String): String?
+
+    /** Projects that are neither archived nor deleted, in tree order of siblings. */
+    @Query("SELECT * FROM project WHERE deleted_at IS NULL AND archived_at IS NULL ORDER BY child_order, id")
+    fun observeActive(): Flow<List<ProjectEntity>>
+
+    /** Every row in any state, by id (backup, invariant checks in tests). */
+    @Query("SELECT * FROM project ORDER BY id")
+    suspend fun all(): List<ProjectEntity>
 
     @Query("SELECT COUNT(*) FROM project")
     suspend fun count(): Int
@@ -56,6 +80,10 @@ interface TaskDao {
 
     @Query("SELECT * FROM task WHERE id = :id")
     suspend fun getById(id: String): TaskEntity?
+
+    /** One task, re-emitted on every change (task details). */
+    @Query("SELECT * FROM task WHERE id = :id")
+    fun observeById(id: String): Flow<TaskEntity?>
 
     @Query(
         """
@@ -75,9 +103,62 @@ interface TaskDao {
     )
     fun observeCompletedInProject(projectId: String): Flow<List<TaskEntity>>
 
+    /**
+     * Today (UX_SPEC §3.1): open tasks due on or before [today], plus open tasks without a date whose
+     * deadline is [today]. Projects in the bin or the archive are left out. Dates are ISO text, so
+     * text comparison is date order. Order: date, timed before all-day, time, priority, list order.
+     */
+    @Query(
+        """
+        SELECT task.* FROM task JOIN project ON project.id = task.project_id
+        WHERE task.deleted_at IS NULL AND task.completed_at IS NULL
+          AND project.deleted_at IS NULL AND project.archived_at IS NULL
+          AND ((task.due_date IS NOT NULL AND task.due_date <= :today)
+               OR (task.due_date IS NULL AND task.deadline = :today))
+        ORDER BY task.due_date, task.due_time IS NULL, task.due_time, task.priority, task.child_order, task.id
+        """,
+    )
+    fun observeToday(today: String): Flow<List<TaskEntity>>
+
+    /** Upcoming: open tasks due between [from] and [to] inclusive, in the same order as [observeToday]. */
+    @Query(
+        """
+        SELECT task.* FROM task JOIN project ON project.id = task.project_id
+        WHERE task.deleted_at IS NULL AND task.completed_at IS NULL
+          AND project.deleted_at IS NULL AND project.archived_at IS NULL
+          AND task.due_date BETWEEN :from AND :to
+        ORDER BY task.due_date, task.due_time IS NULL, task.due_time, task.priority, task.child_order, task.id
+        """,
+    )
+    fun observeDueBetween(from: String, to: String): Flow<List<TaskEntity>>
+
     /** Largest sibling order key at the top level of a project, used to append new tasks. */
     @Query("SELECT MAX(child_order) FROM task WHERE project_id = :projectId AND parent_id IS NULL")
     suspend fun lastTopLevelOrder(projectId: String): String?
+
+    /** Largest order key among the sub-tasks of [parentId], used to append a sub-task. */
+    @Query("SELECT MAX(child_order) FROM task WHERE parent_id = :parentId")
+    suspend fun lastChildOrder(parentId: String): String?
+
+    /** Direct sub-tasks in any state (open, completed, deleted); callers filter. */
+    @Query("SELECT * FROM task WHERE parent_id = :parentId ORDER BY child_order, id")
+    suspend fun children(parentId: String): List<TaskEntity>
+
+    /** Top-level tasks of a project in any state, in list order. */
+    @Query("SELECT * FROM task WHERE project_id = :projectId AND parent_id IS NULL ORDER BY child_order, id")
+    suspend fun topLevelInProject(projectId: String): List<TaskEntity>
+
+    /** Tasks of a project that are not in the bin (open and completed). */
+    @Query("SELECT * FROM task WHERE project_id = :projectId AND deleted_at IS NULL ORDER BY child_order, id")
+    suspend fun liveInProject(projectId: String): List<TaskEntity>
+
+    /** Tasks of a project binned at exactly [deletedAt] — by one command, e.g. with their project. */
+    @Query("SELECT * FROM task WHERE project_id = :projectId AND deleted_at = :deletedAt ORDER BY child_order, id")
+    suspend fun binnedInProjectAt(projectId: String, deletedAt: Long): List<TaskEntity>
+
+    /** Every row in any state, by id (backup, invariant checks in tests). */
+    @Query("SELECT * FROM task ORDER BY id")
+    suspend fun all(): List<TaskEntity>
 
     @Query("SELECT COUNT(*) FROM task")
     suspend fun count(): Int
@@ -166,5 +247,57 @@ interface LabelDao {
     suspend fun labelIdsForTask(taskId: String): List<String>
 
     @Query("SELECT COUNT(*) FROM label")
+    suspend fun count(): Int
+}
+
+@Dao
+interface ReminderDao {
+    @Insert
+    suspend fun insert(reminder: ReminderEntity)
+
+    @Update
+    suspend fun update(reminder: ReminderEntity): Int
+
+    @Query("SELECT * FROM reminder WHERE id = :id")
+    suspend fun getById(id: String): ReminderEntity?
+
+    @Query("SELECT * FROM reminder WHERE task_id = :taskId AND deleted_at IS NULL ORDER BY created_at, id")
+    suspend fun forTask(taskId: String): List<ReminderEntity>
+
+    @Query("SELECT COUNT(*) FROM reminder")
+    suspend fun count(): Int
+}
+
+@Dao
+interface ReminderDeliveryDao {
+    @Insert
+    suspend fun insert(delivery: ReminderDeliveryEntity)
+
+    @Update
+    suspend fun update(delivery: ReminderDeliveryEntity): Int
+
+    @Query("SELECT * FROM reminder_delivery WHERE reminder_id = :reminderId ORDER BY planned_at, id")
+    suspend fun forReminder(reminderId: String): List<ReminderDeliveryEntity>
+
+    /** Deliveries still to fire, for re-registering alarms after a reboot or an update (Ф1a PR 7). */
+    @Query("SELECT * FROM reminder_delivery WHERE fired_at IS NULL AND dismissed_at IS NULL ORDER BY planned_at, id")
+    suspend fun pending(): List<ReminderDeliveryEntity>
+
+    @Query("SELECT COUNT(*) FROM reminder_delivery")
+    suspend fun count(): Int
+}
+
+@Dao
+interface DeferredTodoistNodeDao {
+    @Insert
+    suspend fun insertAll(nodes: List<DeferredTodoistNodeEntity>)
+
+    @Query("SELECT * FROM deferred_todoist_node ORDER BY root_recurring_source_id, depth, source_id")
+    suspend fun all(): List<DeferredTodoistNodeEntity>
+
+    @Query("SELECT COUNT(*) FROM deferred_todoist_node WHERE depth = 0")
+    suspend fun rootCount(): Int
+
+    @Query("SELECT COUNT(*) FROM deferred_todoist_node")
     suspend fun count(): Int
 }

@@ -1,7 +1,7 @@
 # Модель даних — локальна БД
 
-**Схема:** Room 3, версія **2** (Ф0). Перша частина — фактична реалізація й угоди зберігання; друга — нормативний текст специфікації v2.6.1 §4 (перенесено без змін, 3 листопада 2026 року, §13.4). Поведінка складних переходів (§4.3) — у [`docs/RECURRENCE_CONTRACT.md`](RECURRENCE_CONTRACT.md).
-Згенеровані схеми Room: `core/database/schemas/` (комітяться в репозиторій; CI показує незакомічену схему у звіті PR). Схема v1 заморожена й додатково збережена як DDL-фікстура `core/testing/.../SchemaV1Fixture.kt` для тестів міграції.
+**Схема:** Room 3, версія **3** (Ф1a; v2 — Ф0, у `v0.0.1`/`v0.0.2`). Перша частина — фактична реалізація й угоди зберігання; друга — нормативний текст специфікації v2.6.1 §4 (перенесено без змін, 3 листопада 2026 року, §13.4). Поведінка складних переходів (§4.3) — у [`docs/RECURRENCE_CONTRACT.md`](RECURRENCE_CONTRACT.md).
+Згенеровані схеми Room: `core/database/schemas/` (комітяться в репозиторій; CI показує незакомічену схему у звіті PR). Схеми v1 і v2 заморожені й додатково збережені як DDL-фікстури `core/testing/.../SchemaV1Fixture.kt` і `SchemaV2Fixture.kt` для тестів міграції.
 
 ## Угоди зберігання
 
@@ -33,19 +33,45 @@
 | `section` | v2 | Секції проєкту | PK `id`; FK `project_id → project` |
 | `label` | v2 | Мітки (назви не унікальні: дублікати зливаються явно, §5.2) | PK `id` |
 | `task_label` | v2 | Зв'язок задача ↔ мітка | PK `(task_id, label_id)`; FK на `task` і `label` |
+| `task.duration_days` | v3 | Тривалість у днях (ADR-005) | Ціле ≥ 1 або NULL; не разом із `duration_min` — перевіряє домен (`TaskRules.checkDuration`, конструктор `Task`), бо Room не описує CHECK в entity |
+| `reminder` | v3 | Нагадування (sync). Ф1a пише лише авто-нагадування: `relative`, `offset_min = 0`, `is_auto`, `one_shot`; решта колонок — щоб Ф3 не мігрував знову | PK `id`; FK `task_id → task` |
+| `reminder_delivery` | v3 | Що цей пристрій запланував і зробив із нагадуванням; лише локально, без outbox | PK `id` (стабільний ключ будильника); FK `reminder_id → reminder` |
+| `deferred_todoist_node` | v3 | Метадані відкладених при імпорті повторюваних задач і їхніх нащадків (FIX-02) до Ф2; `deferred_reason` — `recurring_root` або `descendant_of_recurring`; `depth = 0` — сам корінь | PK `source_id`; без FK — локальних задач для них немає |
 
 **Чому секції й мітки вже у Ф0.** Їхній UI — Ф1b, але одноразовий імпорт Ф1a має зберегти `ExternalIdentity` для проєктів, секцій, міток і задач (spec §9.0, приймання Ф1a). Таблиці потрібні раніше за екрани. До того ж міграція v1 → v2 з перебудовою `task` (нова FK) — реальна перевірка механізму FIX-01, а не синтетичний приклад.
 
 ## Транзакційний контракт
 
-Усі локальні мутації йдуть через `TaskRepository` → `LocalStore.write { … }` (одна SQLite write-транзакція):
+Усі локальні мутації йдуть через `TaskRepository` (і його `projects`, `reminders`) → `LocalStore.write { … }` (одна SQLite write-транзакція). Для кожної зміненої сутності:
 
 1. змінити сутність;
-2. записати `task_activity`;
+2. для задачі — записати `task_activity`;
 3. `UPDATE local_workspace SET last_local_seq = last_local_seq + 1`, прочитати нове значення;
 4. вставити `outbox_operation` з цим `local_seq`.
 
-Будь-який виняток на будь-якому кроці відкочує всі чотири. `local_seq` береться з лічильника, а не з `MAX(local_seq)`, тож видалення підтверджених операцій у майбутньому не призведе до повторного використання номера.
+Команда, що змінює кілька рядків (перенесення піддерева, видалення проєкту), повторює кроки для кожного рядка в тій самій транзакції. Будь-який виняток на будь-якому кроці відкочує все. `local_seq` береться з лічильника, а не з `MAX(local_seq)`, тож видалення підтверджених операцій у майбутньому не призведе до повторного використання номера.
+
+## Операції Ф1a
+
+Payload (`field_patch`) — JSON-об'єкт із назвами колонок і ключем версії `"v": 1` (`OperationPayload`); після Ф5 його читатиме сервер, тож зміна форми — нова версія. Payload збірок Ф0 (`v0.0.1`, `v0.0.2`) ключа не мають, їхня форма — версія 1. `create` несе повний запис, решта — лише змінені поля; `due_date`, `due_time`, `due_tz` завжди йдуть разом.
+
+| `op_type` | Що в payload | `task_activity.event_type` |
+| --- | --- | --- |
+| `task.create` | Усі поля задачі | `created` |
+| `task.update` | Змінені з `content`, `description`, `priority`, `due_*`, `deadline`, `duration_min`, `duration_days` | `content_changed`, `description_changed`, `priority_changed`, `due_changed`, `deadline_changed`, `duration_changed`; кілька видів полів — `updated` |
+| `task.move` | Змінені з `project_id`, `section_id`, `parent_id`, `child_order`; по одній на кожну задачу піддерева | `moved` |
+| `task.complete`, `task.uncomplete` | `completed_at` | `completed`, `uncompleted` |
+| `task.delete`, `task.restore` | `deleted_at`; по одній на кожну задачу піддерева | `deleted`, `restored` |
+| `project.create` | Усі поля проєкту | — |
+| `project.update` | Змінені з `name`, `description`, `color`, `is_favorite`, `parent_id`, `child_order` | — |
+| `project.archive`, `project.unarchive` | `archived_at`; по одній на кожен підпроєкт | — |
+| `project.delete` | `deleted_at`, `task_fate` (`move_to_inbox` / `delete_with_project`); операції задач ідуть перед нею | — |
+| `project.restore` | `deleted_at` | — |
+| `reminder.create`, `reminder.update`, `reminder.delete` | Повний запис / змінені з `remind_at`, `offset_min`, `enabled` / `deleted_at` | — |
+
+**Дерево задач.** Задача верхнього рівня має глибину 0, підзадачі — до `TaskRules.MAX_DEPTH = 4` (чотири рівні відступу, як у Todoist; межі 0/1/4/5 — spec §12.2). Підзадача — у проєкті й секції свого батька; циклів немає. Піддерево переноситься цілим, разом із задачами в кошику, тож відновлена пізніше задача не опиниться в іншому проєкті, ніж батько. В архівний проєкт не можна додати чи перенести задачу.
+
+**Undo.** Окрема команда, а не видалення операції з outbox. Усі рядки однієї команди отримують той самий момент (`deleted_at`, `archived_at`), тож `restore` / `unarchive` повертають рівно ті рядки, які прибрала ця команда; прибране раніше окремою дією лишається. `moveTask` повертає `TaskMove` з попереднім місцем кожної зміненої задачі, `undoMove` ставить піддерево назад (секцію й порядок теж); `projects.delete` повертає `ProjectDeletion` для `undoDelete`. Системний Inbox не перейменовується, не переноситься, не архівується, не видаляється і не має підпроєктів.
 
 ## Контракти `LocalWorkspace`, `ExternalIdentity` і confirmed / pending / effective
 
@@ -96,13 +122,13 @@
 5. **Перевірка результату** (`MigrationVerifier.Strict`): `integrity_check = ok`, немає порушень FK, нова версія схеми, кожна таблиця, що існувала до оновлення, має ту саму кількість рядків. Міграція, яка свідомо видаляє чи ділить таблицю, має постачати власне правило перевірки.
 6. **Збій** будь-якого кроку → закрити Room, видалити `-wal`/`-shm`, відновити snapshot, перевірити відновлений файл, `MigrationFailedException` (UI показує помилку, дані на старій версії). **Успіх** → маркер видаляється; зберігається лише найновіший snapshot.
 
-Тести (однакові на JVM і на Android-емуляторах API 26 і 37, `core/testing/.../DatabaseScenarios.kt`): міграція v1 → v2 зі збереженням даних і новою FK, WAL-фрейми потрапляють у snapshot, відкат при невдалій перевірці, відновлення після симульованого збою на кожному кроці (`UpgradeFault`), нестача місця, відмова від downgrade, прибирання тимчасових файлів, rollback entity + outbox, безперервність `local_seq`, збереження після перезапуску.
+Тести (однакові на JVM і на Android-емуляторах API 26 і 37, `core/testing/.../DatabaseScenarios.kt`): міграція v1 → v3 і v2 → v3 на справжніх файлах старих схем (дані, секції, мітки, тривалості, нові FK і таблиці), WAL-фрейми потрапляють у snapshot, відкат при невдалій перевірці, відновлення після симульованого збою на кожному кроці (`UpgradeFault`), нестача місця, відмова від downgrade, прибирання тимчасових файлів, rollback entity + outbox, безперервність `local_seq`, збереження після перезапуску.
 
 ## Налаштування Room (ADR-001)
 
 - Драйвер: `BundledSQLiteDriver` на Android і JVM.
 - Журнал: WAL (`JournalMode.WRITE_AHEAD_LOGGING`, перевіряється тестом).
-- **Web (ADR-004):** `WebWorkerSQLiteDriver` і власний worker на SQLite WASM 3.54.1 з VFS `opfs-sahpool` (файли в Origin Private File System браузера), журнал `TRUNCATE`, одне з'єднання, одна вкладка. Схема, DAO і `TaskRepository` ті самі. Міграція v1 → v2 у браузері — та сама Room AutoMigration; захист snapshot (FIX-01) на Web — до релізу Web у Ф7, примітив `VACUUM INTO` у браузері вже перевірено.
+- **Web (ADR-004):** `WebWorkerSQLiteDriver` і власний worker на SQLite WASM 3.54.1 з VFS `opfs-sahpool` (файли в Origin Private File System браузера), журнал `TRUNCATE`, одне з'єднання, одна вкладка. Схема, DAO і `TaskRepository` ті самі. Міграції v1 → v2 → v3 у браузері — ті самі Room AutoMigrations; захист snapshot (FIX-01) на Web — до релізу Web у Ф7, примітив `VACUUM INTO` у браузері вже перевірено.
 - `fallbackToDestructiveMigration` не використовується.
 - FTS5-токенайзер: **`unicode61 remove_diacritics 2`** (ADR-001 п. 5). Перевірено на JVM, Android API 26 і API 37, а також у браузерах (Chromium, Firefox, WebKit): точний збіг, регістр кирилиці, префіксний пошук і пошук польських слів без діакритики (`prad` → `prąd`). Сама FTS-таблиця для задач з'явиться у Ф6a.
 

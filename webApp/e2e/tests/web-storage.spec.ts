@@ -118,10 +118,10 @@ test('tasks persist in OPFS across reload and a new tab', async ({ page, context
     lines.push(`verify after reload: ${verify.status} ${JSON.stringify(verify.json)}`);
     expect(verify.status, JSON.stringify(verify.json)).toBe('pass');
 
-    // Schema upgrade in the browser: a genuine v1 file opened by the v2 Room database.
+    // Schema upgrade in the browser: a genuine v1 file opened by the current Room database (v1 → v2 → v3).
     await leave(page);
     const migrate = await selfTest(page, 'selftest=migrate');
-    lines.push(`migration v1 -> v2: ${migrate.status} ${JSON.stringify(migrate.json)}`);
+    lines.push(`migration v1 -> current: ${migrate.status} ${JSON.stringify(migrate.json)}`);
     expect(migrate.status, JSON.stringify(migrate.json)).toBe('pass');
 
     // A new tab after the old one is closed takes over the database.
@@ -261,15 +261,20 @@ test('app UI starts, renders and saves a typed task', async ({ page, browserName
     expect(resources.length, 'no composeResources requests').toBeGreaterThan(0);
     expect(resources.filter((line) => !line.startsWith('200')), 'failed composeResources requests').toEqual([]);
 
-    // The new-task field sits under the 64dp top bar, 16dp from the left edge (InboxScreen).
-    await page.mouse.click(200, 92);
+    // The "+" button sits 16dp from the bottom-right corner (56dp, Material FAB); it opens Quick Add
+    // with the field focused. Enter adds the task and keeps the sheet open (UX_SPEC §3.4).
+    const viewport = page.viewportSize() ?? { width: 1280, height: 720 };
+    await page.mouse.click(viewport.width - 44, viewport.height - 44);
+    await page.waitForTimeout(1_500);
     await page.keyboard.type(UI_TASK);
     await page.keyboard.press('Enter');
     await page.waitForTimeout(2_000);
     await page.screenshot({ path: path.join(evidenceDir, `ui-${browserName}-typed.png`) });
+    // A tap on the dimmed area above the sheet closes it.
+    await page.mouse.click(200, 92);
+    await page.waitForTimeout(1_500);
 
     // "About" sits at the right end of the top bar; its database facts are checked by ?selftest=inspect.
-    const viewport = page.viewportSize() ?? { width: 1280, height: 720 };
     const beforeAbout = await page.screenshot();
     await page.mouse.click(viewport.width - 45, 32);
     await page.waitForTimeout(2_000);

@@ -6,19 +6,25 @@ import androidx.room3.Database
 import androidx.room3.RoomDatabase
 import androidx.room3.RoomDatabaseConstructor
 import androidx.sqlite.SQLiteDriver
+import io.github.yozh150991.todo.core.database.dao.DeferredTodoistNodeDao
 import io.github.yozh150991.todo.core.database.dao.ExternalIdentityDao
 import io.github.yozh150991.todo.core.database.dao.LabelDao
 import io.github.yozh150991.todo.core.database.dao.OutboxDao
 import io.github.yozh150991.todo.core.database.dao.ProjectDao
+import io.github.yozh150991.todo.core.database.dao.ReminderDao
+import io.github.yozh150991.todo.core.database.dao.ReminderDeliveryDao
 import io.github.yozh150991.todo.core.database.dao.SectionDao
 import io.github.yozh150991.todo.core.database.dao.TaskActivityDao
 import io.github.yozh150991.todo.core.database.dao.TaskDao
 import io.github.yozh150991.todo.core.database.dao.WorkspaceDao
+import io.github.yozh150991.todo.core.database.entity.DeferredTodoistNodeEntity
 import io.github.yozh150991.todo.core.database.entity.ExternalIdentityEntity
 import io.github.yozh150991.todo.core.database.entity.LabelEntity
 import io.github.yozh150991.todo.core.database.entity.LocalWorkspaceEntity
 import io.github.yozh150991.todo.core.database.entity.OutboxOperationEntity
 import io.github.yozh150991.todo.core.database.entity.ProjectEntity
+import io.github.yozh150991.todo.core.database.entity.ReminderDeliveryEntity
+import io.github.yozh150991.todo.core.database.entity.ReminderEntity
 import io.github.yozh150991.todo.core.database.entity.SectionEntity
 import io.github.yozh150991.todo.core.database.entity.TaskActivityEntity
 import io.github.yozh150991.todo.core.database.entity.TaskEntity
@@ -36,11 +42,16 @@ import kotlin.coroutines.CoroutineContext
         SectionEntity::class,
         LabelEntity::class,
         TaskLabelEntity::class,
+        ReminderEntity::class,
+        ReminderDeliveryEntity::class,
+        DeferredTodoistNodeEntity::class,
     ],
     version = AppDatabase.SCHEMA_VERSION,
     // Every migration must also pass DatabaseOpener's snapshot + verification (FIX-01).
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
+        // v3 only adds a nullable column and three tables: no data is rewritten.
+        AutoMigration(from = 2, to = 3),
     ],
 )
 @ConstructedBy(AppDatabaseConstructor::class)
@@ -54,9 +65,12 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun sectionDao(): SectionDao
     abstract fun labelDao(): LabelDao
     abstract fun diagnosticsDao(): DiagnosticsDao
+    abstract fun reminderDao(): ReminderDao
+    abstract fun reminderDeliveryDao(): ReminderDeliveryDao
+    abstract fun deferredTodoistNodeDao(): DeferredTodoistNodeDao
 
     companion object {
-        const val SCHEMA_VERSION = 2
+        const val SCHEMA_VERSION = 3
         const val DEFAULT_FILE_NAME = "todo.db"
     }
 }

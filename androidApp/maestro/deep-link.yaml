@@ -1,0 +1,12 @@
+# Deep link to task details (docs/UX_SPEC.md §2.1; Ф1a PR 1, used by reminders in PR 7):
+# <applicationId>://task/<id> opens the details over the start list, and Back leads to the list,
+# not out of the app. A task that no longer exists says so instead of failing.
+appId: io.github.yozh150991.todo.debug
+---
+- launchApp:
+    clearState: true
+- assertVisible: "All done for today"
+- openLink: "io.github.yozh150991.todo.debug://task/missing"
+- assertVisible: "This task no longer exists"
+- back
+- assertVisible: "All done for today"

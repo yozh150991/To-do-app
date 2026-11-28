@@ -17,8 +17,23 @@ if [ -f upgrade/skip.txt ]; then
   exit 0
 fi
 
-launch_and_wait() { # waits until the app has created and populated its database
+open_inbox() { # debug builds start on Today, a placeholder that does not open the database yet
+  adb shell uiautomator dump /sdcard/ui.xml >> "$LOG" 2>&1
+  local xy
+  xy=$(adb exec-out cat /sdcard/ui.xml | python3 tools/ci/tap-text.py Inbox Вхідні Skrzynka)
+  if [ -n "$xy" ]; then
+    log "opening Inbox (tap at $xy)"
+    # shellcheck disable=SC2086 # "x y" are two arguments
+    adb shell input tap $xy
+  else
+    log "Inbox tab not found on screen; waiting for the app to open the database itself"
+  fi
+}
+
+launch_and_wait() { # waits until the app has opened (created or migrated) and populated its database
   adb shell am start -W -n "$PKG/$ACTIVITY" >> "$LOG" 2>&1
+  sleep 3
+  open_inbox
   for _ in $(seq 1 60); do
     if adb shell run-as "$PKG" ls databases/todo.db >/dev/null 2>&1; then
       sleep 5

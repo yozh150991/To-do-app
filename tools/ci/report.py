@@ -108,6 +108,38 @@ def job_section(name, outcome, log_path):
     return out, details
 
 
+def generated_files():
+    """Files the build produced that must be committed; shown before the long evidence so truncation never hides them."""
+    out = []
+    # Kotlin/Wasm writes the lock file it resolved to build/wasm/yarn.lock; with a stale committed lock
+    # the build stops at kotlinWasmStoreYarnLock, so show the resolved one to commit.
+    for generated, committed in (("build/wasm/yarn.lock", "kotlin-js-store/wasm/yarn.lock"),):
+        if os.path.isfile(generated) and read(generated) != read(committed):
+            out += [
+                "#### Resolved yarn.lock differs from the committed one",
+                f"Copy `{generated}` to `{committed}`:",
+                "<details><summary><code>" + committed + "</code></summary>", "", "```text", read(generated), "```", "</details>", "",
+            ]
+
+    status = subprocess.run(
+        ["git", "status", "--porcelain", "--untracked-files=all", "--", "core/database/schemas", "kotlin-js-store"],
+        capture_output=True, text=True, check=False,
+    ).stdout.strip()
+    if status:
+        out.append("#### Generated files not committed")
+        out.append("Room schemas or the Kotlin/JS yarn.lock differ from the repository; commit them:")
+        for line in status.splitlines():
+            path = line[3:].strip()
+            files = [path] if os.path.isfile(path) else sorted(
+                glob.glob(os.path.join(path, "**/*.json"), recursive=True) + glob.glob(os.path.join(path, "**/*.lock"), recursive=True)
+            )
+            for f in files:
+                fence = "json" if f.endswith(".json") else "text"
+                out += [f"<details><summary><code>{f}</code></summary>", "", f"```{fence}", read(f), "```", "</details>"]
+        out.append("")
+    return out
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--sha", required=True)
@@ -144,6 +176,8 @@ def main():
         out += all_details
         out.append("")
 
+    out += generated_files()
+
     evidence = sorted(glob.glob("**/build/reports/runtime-evidence/*.txt", recursive=True))
     if evidence:
         out.append("#### Runtime evidence")
@@ -166,33 +200,6 @@ def main():
             out.append(f"- Web build `webApp/build/dist/wasmJs/productionExecutable/` — {total / 1024 / 1024:.2f} MiB in {len(web)} files:")
             for path in web:
                 out.append(f"  - `{os.path.basename(path)}` — {os.path.getsize(path) / 1024:.0f} KiB")
-        out.append("")
-
-    # Kotlin/Wasm writes the lock file it resolved to build/wasm/yarn.lock; with a stale committed lock
-    # the build stops at kotlinWasmStoreYarnLock, so show the resolved one to commit.
-    for generated, committed in (("build/wasm/yarn.lock", "kotlin-js-store/wasm/yarn.lock"),):
-        if os.path.isfile(generated) and read(generated) != read(committed):
-            out += [
-                "#### Resolved yarn.lock differs from the committed one",
-                f"Copy `{generated}` to `{committed}`:",
-                "<details><summary><code>" + committed + "</code></summary>", "", "```text", read(generated), "```", "</details>", "",
-            ]
-
-    status = subprocess.run(
-        ["git", "status", "--porcelain", "--untracked-files=all", "--", "core/database/schemas", "kotlin-js-store"],
-        capture_output=True, text=True, check=False,
-    ).stdout.strip()
-    if status:
-        out.append("#### Generated files not committed")
-        out.append("Room schemas or the Kotlin/JS yarn.lock differ from the repository; commit them:")
-        for line in status.splitlines():
-            path = line[3:].strip()
-            files = [path] if os.path.isfile(path) else sorted(
-                glob.glob(os.path.join(path, "**/*.json"), recursive=True) + glob.glob(os.path.join(path, "**/*.lock"), recursive=True)
-            )
-            for f in files:
-                fence = "json" if f.endswith(".json") else "text"
-                out += [f"<details><summary><code>{f}</code></summary>", "", f"```{fence}", read(f), "```", "</details>"]
         out.append("")
 
     text = "\n".join(out)
