@@ -29,3 +29,7 @@ signing/
 # Python
 __pycache__/
 *.pyc
+
+# Claude Code: робочі файли циклу й локальні налаштування
+.claude/work/
+.claude/settings.local.json
